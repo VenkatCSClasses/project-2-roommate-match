@@ -1,5 +1,10 @@
-def main():
-    print("Hello from project-2-roommate-match!")
+"""Project entrypoint."""
+
+from roommate_match.src.cli import main as run_app
+
+
+def main() -> None:
+    run_app()
 
 
 if __name__ == "__main__":
