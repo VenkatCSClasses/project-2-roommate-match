@@ -42,6 +42,4 @@ ALTER TABLE students
 ADD group_id INT
 REFERENCES groups(id);
 
-UPDATE students
-SET group_id = 2 
-WHERE id = 705000008;
+DROP TABLE students_to_groups;
