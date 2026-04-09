@@ -37,3 +37,11 @@ CREATE Table students_to_groups (
     FOREIGN KEY (student_id) REFERENCES students(id),
     FOREIGN KEY (group_id) REFERENCES groups(id)
 );
+
+ALTER TABLE students
+ADD group_id INT
+REFERENCES groups(id);
+
+UPDATE students
+SET group_id = 2 
+WHERE id = 705000008;
