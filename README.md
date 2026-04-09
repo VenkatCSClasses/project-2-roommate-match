@@ -4,3 +4,6 @@
 Client Pitch: https://docs.google.com/document/d/1DDQLSBJ6T8TasFYi-sCNYtr0rpkmOyzu6-dGCkTyK6w/edit?usp=sharing
 
 Sprint 1: https://docs.google.com/document/d/1Ja-57dA5BZ617KdQ6HQ01w6K-lKyyLGOxOXHXSWbuKI/edit?usp=sharing
+
+### Conceptual / Class Diagram
+![UML Class Diagram](UMLClassDiagram.png)
