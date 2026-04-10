@@ -9,8 +9,31 @@ class Student:
         self.preferences = []
         self.groupID = -1  # No group assigned
 
+    #Get methods
+    def getID(self):
+        #Return the student's ID
+        pass
+
+    def getName(self):
+        #Return the student's name
+        pass
+
+    def getEmail(self):
+        #Return the student's email
+        pass
+
+    def getPassword(self):
+        #Return the student's password
+        pass
+
+    def getHometown(self):
+        #Return the student's hometown
+        pass
+
+
+
     def sendRequest(self, other_student):
-        #Send a roommate request to another student using their student ID
+        #Send a roommate request to another student using their student ID only
         pass
 
     def respondRequest(self, other_student, response: str):
@@ -42,5 +65,5 @@ class Student:
         pass
 
     def searchStudents(self, searchField: str):
-        #Search for students based on a certain element such as ID, name, hometown etc.
+        #Search for other students based on their name or student ID only
         pass
