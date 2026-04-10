@@ -10,3 +10,15 @@ class roommateRequest:
 
     def reject_request(self):
         self.accepted = False
+
+    def getStatus(self):
+        return self.accepted
+    
+    def getSenderId(self):
+        return self.sender_id
+    
+    def getReceiverId(self):   
+        return self.receiver_id
+    
+    def __str__(self):
+        return f"Roommate Request from {self.sender_id} to {self.receiver_id}, Accepted: {self.accepted}"   
