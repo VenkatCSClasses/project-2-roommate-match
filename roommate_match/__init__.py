@@ -1,3 +1,3 @@
-from .src import roommateRequest
+from .src import roommateRequest, pairing
 
-__all__ = ['roommateRequest']
+__all__ = ['roommateRequest', 'pairing']
