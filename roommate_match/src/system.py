@@ -1,5 +1,5 @@
 from random import randint
-"from src.student import Student"
+from src.Student import Student
 
 class RoommateSystem:
     def __init__(self):
@@ -33,15 +33,15 @@ class RoommateSystem:
         for student in self.students:
             if student.name == name:
                 return student
-        return f"Student {name} not found"
+        return None
 
     def getStudentById(self, id):
         for student in self.students:
             if student.id == id:
                 return student
-        return f"Student {id} not found"
+        return None
     
-    def gerenateId(self):
+    def gerenateGroupId(self):
         newGroupId = randint(1,10)
         existing_ids = [s.groupID for s in self.students]
         while newGroupId in existing_ids:
@@ -53,7 +53,6 @@ class RoommateSystem:
         student1 = self.getStudentById(id1)
         student2 = self.getStudentById(id2)
 
-        groupId= self.gerenateId()
+        groupId = self.gerenateGroupId()
         student1.groupID = groupId
-        student2.groupID = groupId
-        return "Pairing successful"   
+        student2.groupID = groupId  

@@ -1,5 +1,5 @@
 from random import randint
-"from roommate_match.src.student import Student"
+from src.Student import Student
 
 class Admin:
     def __init__(self, id, name, email, password, system): 
@@ -19,14 +19,20 @@ class Admin:
         return self.system.students
 
     def getStudentByName(self, name):
-        return self.system.getStudentByName(name)
+        student = self.system.getStudentByName(name)
+        if  student == None:
+            print("Student " + name + " not found")
+        return student
 
     def getStudentById(self, id):
-       return self.system.getStudentById(id)
+        student = self.system.getStudentById(id)
+        if  student == None:
+            print("Student " + id + " not found")
+        return student
             
     def finalizePairing(self, id1, id2):
         #puts both students in the same group and adds the group to the matches list
-        return self.system.finalizePairing(id1, id2)
+        self.system.finalizePairing(id1, id2)
 
     def addPreferenceOption(self, preference):
         self.system.preference_options.append(preference)
