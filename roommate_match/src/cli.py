@@ -75,10 +75,12 @@ class LoginApp(App):
 			status.update("Please enter both an email and password.")
 			return
 
+        # TODO: check email and username in database
 		status.update(f"Signed in as {email}.")
 
 
 def main() -> None:
+	#TODO: load database
 	LoginApp().run()
 
 
