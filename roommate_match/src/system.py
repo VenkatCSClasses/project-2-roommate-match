@@ -1,5 +1,5 @@
 from random import randint
-from roommate_match.src.Student import Student
+"from src.student import Student"
 
 class RoommateSystem:
     def __init__(self):
