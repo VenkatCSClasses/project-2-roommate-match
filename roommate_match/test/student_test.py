@@ -9,13 +9,23 @@ class StudentTest(unittest.TestCase):
         self.student1.updatePassword("newpassword123")
         self.assertEqual(self.student1.password, "newpassword123")
 
+        with self.assertRaises(ValueError):
+            self.student1.updatePassword("")
+
     def test_updateName(self):
         self.student1.updateName("Johnathan Doe")
         self.assertEqual(self.student1.name, "Johnathan Doe")
 
+        with self.assertRaises(ValueError):
+            self.student1.updateName("")
+
     def test_updateHometown(self):
         self.student1.updateHometown("Chicago")
         self.assertEqual(self.student1.hometown, "Chicago")
+
+        self.student1.updateHometown("")
+        self.assertEqual(self.student1.hometown, "")
+
 
 if __name__ == '__main__':
     unittest.main()

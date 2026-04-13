@@ -42,15 +42,22 @@ class Student:
 
     def updatePassword(self, new_password: str):
         #Update the student's password
-        pass
+        
+        if new_password == "":
+            raise ValueError("Password cannot be empty")
+        self.password = new_password
 
     def updateName(self, new_name: str):
         #Update the student's name
-        pass
+        
+        if new_name == "":
+            raise ValueError("Name cannot be empty")
+        self.name = new_name
 
     def updateHometown(self, new_hometown: str):
         #Update the student's hometown
-        pass
+        
+        self.hometown = new_hometown
 
     def updateInterests(self, new_interests: list):
         #Update the student's interests
