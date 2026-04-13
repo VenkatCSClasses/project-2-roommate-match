@@ -6,7 +6,7 @@ class TestAdmin(unittest.TestCase):
     
     def setUp(self):
         self.system = RoommateSystem()
-        self.admin = Admin(1,"Admin1", "Admin1@gmail.com", "123")
+        self.admin = Admin(1,"Admin1", "Admin1@gmail.com", "123", self.system)
         
     def test_add_student(self):
         self.admin.addStudent("Julia", "j@gmail.com", "123", "Ithaca")
@@ -51,7 +51,7 @@ class TestAdmin(unittest.TestCase):
 
     def test_add_preference_option(self):
         self.admin.addPreferenceOption("Clean")
-        self.assertIn("Clean", self.admin.preference_options)
+        self.assertIn("Clean", self.system.preference_options)
 
     def test_interest_options(self):
         self.admin.addInterestOption("Sports")

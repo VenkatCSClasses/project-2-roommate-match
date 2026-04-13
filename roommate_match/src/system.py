@@ -4,7 +4,7 @@ from random import randint
 class RoommateSystem:
     def __init__(self):
         self.students = []
-        self.matches = []
+        #self.matches = []
         self.preference_options = []
         self.interest_options = []
 
@@ -41,5 +41,19 @@ class RoommateSystem:
                 return student
         return f"Student {id} not found"
     
+    def gerenateId(self):
+        newGroupId = randint(1,10)
+        existing_ids = [s.groupID for s in self.students]
+        while newGroupId in existing_ids:
+            newGroupId = randint(1,10)
+        
+        return newGroupId
+
     def finalizePairing(self, id1, id2):
-        pass
+        student1 = self.getStudentById(id1)
+        student2 = self.getStudentById(id2)
+
+        groupId= self.gerenateId()
+        student1.groupID = groupId
+        student2.groupID = groupId
+        return "Pairing successful"   

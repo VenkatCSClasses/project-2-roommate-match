@@ -10,32 +10,32 @@ class Admin:
         self.system = system
 
     def addStudent(self, name, email, password, hometown):
-        pass
+        self.system.addStudent(name, email, password, hometown)
 
     def removeStudent(self, id):
-        pass
+        self.system.students.remove(self.system.getStudentById(id))
 
     def viewAllStudents(self):
         return self.system.students
 
     def getStudentByName(self, name):
-        pass
+        return self.system.getStudentByName(name)
 
     def getStudentById(self, id):
-        pass
+       return self.system.getStudentById(id)
             
-    def finalizePairing(self, student1_id, student2_id):
+    def finalizePairing(self, id1, id2):
         #puts both students in the same group and adds the group to the matches list
-        pass
+        return self.system.finalizePairing(id1, id2)
 
     def addPreferenceOption(self, preference):
-        pass
+        self.system.preference_options.append(preference)
     
     def viewPreferenceOptions(self):
-        pass
+        return self.system.preference_options
 
-    def addInterestOption(self, preference):
-        pass
+    def addInterestOption(self, interest):
+        self.system.interest_options.append(interest)
     
     def viewInterestOptions(self):
-        pass
+        return self.system.interest_options
