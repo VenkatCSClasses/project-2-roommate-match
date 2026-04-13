@@ -30,10 +30,11 @@ class RoommateSystem:
         return f"There is no student with id: {id}"
 
     def getStudentByName(self, name):
+        studentList = []
         for student in self.students:
             if student.name == name:
-                return student
-        return None
+                studentList.append(student)
+        return studentList
 
     def getStudentById(self, id):
         for student in self.students:

@@ -15,8 +15,8 @@ class TestAdmin(unittest.TestCase):
     def test_remove_student(self):
         self.admin.addStudent("Julia", "j@gmail.com", "123", "Ithaca")
         self.assertEqual(len(self.system.students), 1)
-        student1 = self.admin.getStudentByName("Julia")
-        self.admin.removeStudent(student1.id)
+        students = self.admin.getStudentByName("Julia")
+        self.admin.removeStudent(students[0].id)
         self.assertEqual(len(self.system.students), 0)
 
     def test_view_all_students(self):
@@ -28,8 +28,12 @@ class TestAdmin(unittest.TestCase):
         self.assertEqual(len(students), 3)
 
     def test_get_student_by_name(self):
-        self.assertEqual(self.admin.getStudentByName("Julia"), self.admin.addStudent("Julia", "j@gmail.com", "123", "Ithaca"))
-        self.assertEqual(self.admin.getStudentByName("Bob"), self.admin.addStudent("Bob", "bob@gmail.com", "123", "Liverpool"))
+        self.assertEqual(len(self.admin.getStudentByName("J")),0)
+        self.admin.addStudent("Julia", "j@gmail.com", "123", "Ithaca")
+        self.admin.addStudent("Bob", "j@gmail.com", "123", "Ithaca")
+        self.assertEqual(len(self.admin.getStudentByName("Julia")),1)
+        self.admin.addStudent("Bob", "bob@gmail.com", "123", "Liverpool")
+        self.assertEqual(len(self.admin.getStudentByName("Bob")),2)
 
 
     def test_get_student_by_id(self):

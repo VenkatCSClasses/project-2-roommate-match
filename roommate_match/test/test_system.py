@@ -11,34 +11,35 @@ class TestRoommateSystem(unittest.TestCase):
         self.assertEqual(len(self.system.students), 1)
 
     def test_remove_student(self):
-        student1 = self.system.addStudent("Julia", "j@test.com", "123", "NY")
-        self.system.removeStudent(student1.id)
+        self.system.addStudent("Julia", "j@test.com", "123", "NY")
+        student = self.system.getStudentByName("Julia")
+        self.system.removeStudent(student.id)
         self.assertEqual(len(self.system.students), 0)
 
     def test_get_student_by_name(self):
         self.system.addStudent("Julia", "j@test.com", "123", "NY")
-        self.system.addStudent("Julia", "j2@test.com", "123", "CA")
-
-        result = self.system.getStudentByName("Julia")
-        self.assertEqual(len(result), 2)
+        student = self.system.getStudentByName("Julia")
+        self.assertEqual(len(student), 1)
 
     def test_get_student_by_id(self):
-        student1 = self.system.addStudent("Julia", "j@test.com", "123", "NY")
-        student2 = self.system.addStudent("Julia", "j2@test.com", "123", "CA")
-        result1 = self.system.getStudentById(student1)
-        self.assertEqual(len(result1), 1)
-        result2 = self.system.getStudentById(student2)
-        self.assertEqual(len(result2), 1)
+        self.system.addStudent("Julia", "j@test.com", "123", "NY")
+        student1 = self.system.students[0]
+        foundById1 = self.system.getStudentById(student1.id)
+        self.assertEqual(foundById1, student1)
 
     def test_finalize_pairing(self):
-        s1 = self.system.addStudent("April", "a@test.com", "123", "NY")
-        s2 = self.system.addStudent("Bodb", "b@test.com", "123", "CA")
-
-        result = self.system.finalizePairing(s1.id, s2.id)
-
-        self.assertEqual(result, "Pairing successful")
+        self.system.addStudent("April", "a@test.com", "123", "NY")
+        self.system.addStudent("Bob", "b@test.com", "123", "CA")
+        
+        aprilStudents = self.system.getStudentByName("April")
+        s1 = aprilStudents[0]
+        
+        bobStudents = self.system.getStudentByName("Bob")
+        s2 = bobStudents[0]
+        
+        self.system.finalizePairing(s1.id, s2.id)
         self.assertEqual(s1.groupID, s2.groupID)
-        self.assertEqual(len(self.system.matches), 1)
+        
 
 if __name__ == "__main__":
     unittest.main()

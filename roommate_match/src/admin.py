@@ -19,10 +19,10 @@ class Admin:
         return self.system.students
 
     def getStudentByName(self, name):
-        student = self.system.getStudentByName(name)
-        if  student == None:
+        students = self.system.getStudentByName(name)
+        if  len(students) == 0:
             print("Student " + name + " not found")
-        return student
+        return students
 
     def getStudentById(self, id):
         student = self.system.getStudentById(id)
