@@ -1,5 +1,5 @@
 from random import randint
-from src.Student import Student
+from .Student import Student
 
 class RoommateSystem:
     def __init__(self):
