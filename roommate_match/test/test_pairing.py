@@ -1,5 +1,5 @@
 import unittest
-from src.pairing import pairing
+from roommate_match.src.pairing import pairing
 
 class TestPairing(unittest.TestCase):
     def setUp(self):

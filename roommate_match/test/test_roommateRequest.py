@@ -1,5 +1,5 @@
 import unittest
-from src.roommateRequest import roommateRequest
+from roommate_match.src.roommateRequest import roommateRequest
 
 class TestRoommateRequest(unittest.TestCase):
 

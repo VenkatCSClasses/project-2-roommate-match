@@ -1,5 +1,5 @@
 import unittest
-from src.system import RoommateSystem
+from roommate_match.src.system import RoommateSystem
 
 class TestRoommateSystem(unittest.TestCase):
 
