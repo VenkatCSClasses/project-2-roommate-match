@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from csv import DictReader
 from pathlib import Path
 from typing import Any
 
@@ -354,6 +355,138 @@ def _ensure_accepted_link_between(connection: sqlite3.Connection, student_a: int
 		""",
 		(student_a, student_b),
 	)
+
+
+def get_interest_options(connection: sqlite3.Connection) -> list[tuple[int, str]]:
+	if _table_exists(connection, "interests"):
+		rows = connection.execute("SELECT id, title FROM interests ORDER BY title").fetchall()
+		options = [
+			(int(row[0]), str(row[1]))
+			for row in rows
+			if row
+			and row[0] is not None
+			and row[1] is not None
+			and str(row[1]).strip().lower() not in {"title", "interest"}
+		]
+		if options:
+			return options
+
+	return _get_interest_options_from_csv()
+
+
+def get_student_interest_titles(connection: sqlite3.Connection, student_id: int) -> list[str]:
+	return _get_student_interest_titles(connection, student_id)
+
+
+def add_interest_to_student(
+	connection: sqlite3.Connection,
+	student_id: int,
+	interest_title: str,
+) -> tuple[bool, str]:
+	join_table = _get_or_create_interest_join_table(connection)
+	interest_id = _find_interest_id(connection, interest_title)
+	if interest_id is None:
+		return False, "That interest does not exist."
+
+	existing = connection.execute(
+		f"SELECT 1 FROM {join_table} WHERE student_id = ? AND interest_id = ? LIMIT 1",
+		(student_id, interest_id),
+	).fetchone()
+	if existing is not None:
+		return False, "Interest already exists in your profile."
+
+	columns = _table_columns(connection, join_table)
+	if "id" in columns:
+		next_id_row = connection.execute(f"SELECT COALESCE(MAX(id), 0) + 1 FROM {join_table}").fetchone()
+		next_id = int(next_id_row[0]) if next_id_row is not None else 1
+		connection.execute(
+			f"INSERT INTO {join_table} (id, student_id, interest_id) VALUES (?, ?, ?)",
+			(next_id, student_id, interest_id),
+		)
+	else:
+		connection.execute(
+			f"INSERT INTO {join_table} (student_id, interest_id) VALUES (?, ?)",
+			(student_id, interest_id),
+		)
+
+	connection.commit()
+	return True, "Interest added."
+
+
+def remove_interest_from_student(
+	connection: sqlite3.Connection,
+	student_id: int,
+	interest_title: str,
+) -> tuple[bool, str]:
+	join_table = _get_or_create_interest_join_table(connection)
+	interest_id = _find_interest_id(connection, interest_title)
+	if interest_id is None:
+		return False, "That interest does not exist."
+
+	result = connection.execute(
+		f"DELETE FROM {join_table} WHERE student_id = ? AND interest_id = ?",
+		(student_id, interest_id),
+	)
+	connection.commit()
+
+	if result.rowcount == 0:
+		return False, "Interest was not in your profile."
+	return True, "Interest removed."
+
+
+def _get_or_create_interest_join_table(connection: sqlite3.Connection) -> str:
+	join_table = _choose_interest_join_table(connection)
+	if join_table is not None:
+		return join_table
+
+	connection.execute(
+		"""
+		CREATE TABLE IF NOT EXISTS students_to_interest (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			student_id INT,
+			interest_id INT
+		)
+		"""
+	)
+	connection.commit()
+	return "students_to_interest"
+
+
+def _find_interest_id(connection: sqlite3.Connection, interest_title: str) -> int | None:
+	if not _table_exists(connection, "interests"):
+		return None
+
+	row = connection.execute(
+		"SELECT id FROM interests WHERE LOWER(title) = LOWER(?) LIMIT 1",
+		(interest_title,),
+	).fetchone()
+	if row is None:
+		return None
+	return int(row[0])
+
+
+def _get_interest_options_from_csv() -> list[tuple[int, str]]:
+	csv_path = Path(__file__).resolve().parents[2] / "Dummy Data" / "interests.csv"
+	if not csv_path.exists():
+		return []
+
+	options: list[tuple[int, str]] = []
+	with csv_path.open("r", encoding="utf-8") as csv_file:
+		for row in DictReader(csv_file):
+			interest_id_raw = row.get("interest_id")
+			title_raw = row.get("title")
+			if interest_id_raw is None or title_raw is None:
+				continue
+			try:
+				interest_id = int(str(interest_id_raw).strip())
+			except ValueError:
+				continue
+			title = str(title_raw).strip()
+			if not title:
+				continue
+			options.append((interest_id, title))
+
+	return options
 
 
 def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:

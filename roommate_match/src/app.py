@@ -5,13 +5,17 @@ from textual.containers import Container
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label
 
 from .databaseHelper import (
+	add_interest_to_student,
 	bootstrap_database_and_system,
 	create_roommate_request,
+	get_interest_options,
 	get_group_status_for_student,
 	get_incoming_roommate_requests,
 	get_outgoing_roommate_requests,
+	get_student_interest_titles,
 	revoke_outgoing_roommate_requests,
 	revoke_specific_outgoing_roommate_request,
+	remove_interest_from_student,
 	respond_to_roommate_request,
 )
 from .roommateRequest import roommateRequest
@@ -30,6 +34,8 @@ class LoginApp(App):
 	request_rows: list[dict[str, object]] = []
 	selected_request_id: int | None = None
 	request_table_mode: str | None = None
+	interest_rows: list[tuple[str, bool]] = []
+	selected_interest_title: str | None = None
 	group_members: list[dict[str, str]] = []
 
 	CSS = """
@@ -107,13 +113,14 @@ class LoginApp(App):
 			yield Button("View Other Students", id="view-students-button", variant="primary")
 			yield Button("View Group Status", id="make-group-button", variant="primary")
 			yield Button("View Roommate Requests", id="view-requests-button", variant="primary")
-			yield Button("Change Preferences", id="change-preferences-button", variant="primary")
+			yield Button("Change Interests", id="change-interests-button", variant="primary")
 			yield Button("Logout", id="logout-button", variant="default")
 			yield Button("Save and Exit", id="save-exit-button", variant="error")
 			yield Button("Return", id="return-button", variant="default", classes="hidden")
 			yield Label("", id="menu-status")
 			yield DataTable(id="students-table", classes="hidden")
 			yield DataTable(id="requests-table", classes="hidden")
+			yield DataTable(id="interests-table", classes="hidden")
 			yield Button("Send Roommate Request", id="send-request-button", variant="primary", classes="hidden")
 			yield Button("Accept Request", id="accept-request-button", variant="primary", classes="hidden")
 			yield Button("Reject Request", id="reject-request-button", variant="error", classes="hidden")
@@ -131,6 +138,7 @@ class LoginApp(App):
 			self.db_connection_error = True
 		self.query_one("#students-table", DataTable).cursor_type = "row"
 		self.query_one("#requests-table", DataTable).cursor_type = "row"
+		self.query_one("#interests-table", DataTable).cursor_type = "row"
 		self.query_one("#email", Input).focus()
 
 	def on_unmount(self) -> None:
@@ -148,8 +156,8 @@ class LoginApp(App):
 			self._show_group_status_menu()
 		elif event.button.id == "view-requests-button":
 			self._show_roommate_requests_menu()
-		elif event.button.id == "change-preferences-button":
-			self.query_one("#menu-status", Label).update("Opening preferences...")
+		elif event.button.id == "change-interests-button":
+			self._show_change_interests_menu()
 		elif event.button.id == "logout-button":
 			self._logout()
 		elif event.button.id == "save-exit-button":
@@ -168,6 +176,8 @@ class LoginApp(App):
 			self._handle_student_row_selection(event.cursor_row)
 		elif event.data_table.id == "requests-table":
 			self._handle_request_row_selection(event.cursor_row)
+		elif event.data_table.id == "interests-table":
+			self._handle_interest_row_selection(event.cursor_row)
 
 	def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
 		if event.data_table.id == "students-table":
@@ -184,6 +194,8 @@ class LoginApp(App):
 			self._handle_student_row_selection(row_index)
 		elif event.data_table.id == "requests-table":
 			self._handle_request_row_selection(row_index)
+		elif event.data_table.id == "interests-table":
+			self._preview_interest_row(row_index)
 
 	def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
 		row_index = event.coordinate.row
@@ -194,6 +206,8 @@ class LoginApp(App):
 			self._handle_student_row_selection(row_index)
 		elif event.data_table.id == "requests-table":
 			self._handle_request_row_selection(row_index)
+		elif event.data_table.id == "interests-table":
+			self._preview_interest_row(row_index)
 
 	def action_login(self) -> None:
 		self._submit_login()
@@ -255,6 +269,7 @@ class LoginApp(App):
 		status = self.query_one("#menu-status", Label)
 		table = self.query_one("#students-table", DataTable)
 		requests_table = self.query_one("#requests-table", DataTable)
+		interests_table = self.query_one("#interests-table", DataTable)
 		group_details = self.query_one("#group-details", Label)
 
 		if self.db_connection_error or self.system is None:
@@ -279,6 +294,7 @@ class LoginApp(App):
 
 		self._set_students_view_mode(True)
 		requests_table.add_class("hidden")
+		interests_table.add_class("hidden")
 		group_details.add_class("hidden")
 		self.query_one("#accept-request-button", Button).add_class("hidden")
 		self.query_one("#reject-request-button", Button).add_class("hidden")
@@ -291,6 +307,7 @@ class LoginApp(App):
 		status = self.query_one("#menu-status", Label)
 		table = self.query_one("#students-table", DataTable)
 		requests_table = self.query_one("#requests-table", DataTable)
+		interests_table = self.query_one("#interests-table", DataTable)
 		send_button = self.query_one("#send-request-button", Button)
 		accept_button = self.query_one("#accept-request-button", Button)
 		reject_button = self.query_one("#reject-request-button", Button)
@@ -299,6 +316,7 @@ class LoginApp(App):
 
 		table.add_class("hidden")
 		requests_table.add_class("hidden")
+		interests_table.add_class("hidden")
 		send_button.add_class("hidden")
 		accept_button.add_class("hidden")
 		reject_button.add_class("hidden")
@@ -323,6 +341,7 @@ class LoginApp(App):
 		status = self.query_one("#menu-status", Label)
 		students_table = self.query_one("#students-table", DataTable)
 		requests_table = self.query_one("#requests-table", DataTable)
+		interests_table = self.query_one("#interests-table", DataTable)
 		send_button = self.query_one("#send-request-button", Button)
 		accept_button = self.query_one("#accept-request-button", Button)
 		reject_button = self.query_one("#reject-request-button", Button)
@@ -347,6 +366,7 @@ class LoginApp(App):
 			)
 
 		students_table.add_class("hidden")
+		interests_table.add_class("hidden")
 		group_details.add_class("hidden")
 		send_button.add_class("hidden")
 		accept_button.add_class("hidden")
@@ -366,6 +386,7 @@ class LoginApp(App):
 		status = self.query_one("#menu-status", Label)
 		students_table = self.query_one("#students-table", DataTable)
 		requests_table = self.query_one("#requests-table", DataTable)
+		interests_table = self.query_one("#interests-table", DataTable)
 		send_button = self.query_one("#send-request-button", Button)
 		accept_button = self.query_one("#accept-request-button", Button)
 		reject_button = self.query_one("#reject-request-button", Button)
@@ -390,6 +411,7 @@ class LoginApp(App):
 			)
 
 		students_table.add_class("hidden")
+		interests_table.add_class("hidden")
 		group_details.add_class("hidden")
 		send_button.add_class("hidden")
 		accept_button.add_class("hidden")
@@ -404,6 +426,56 @@ class LoginApp(App):
 
 		requests_table.remove_class("hidden")
 		requests_table.focus()
+
+	def _show_change_interests_menu(self, info_message: str | None = None) -> None:
+		status = self.query_one("#menu-status", Label)
+		students_table = self.query_one("#students-table", DataTable)
+		requests_table = self.query_one("#requests-table", DataTable)
+		interests_table = self.query_one("#interests-table", DataTable)
+		send_button = self.query_one("#send-request-button", Button)
+		accept_button = self.query_one("#accept-request-button", Button)
+		reject_button = self.query_one("#reject-request-button", Button)
+		revoke_button = self.query_one("#revoke-request-button", Button)
+		group_details = self.query_one("#group-details", Label)
+
+		if self.current_student is None or self.db_connection is None:
+			status.update("No logged-in student found.")
+			return
+
+		interest_options = get_interest_options(self.db_connection)
+		current_interest_titles = set(
+			get_student_interest_titles(self.db_connection, int(self.current_student.id))
+		)
+
+		self.interest_rows = [
+			(title, title in current_interest_titles)
+			for _, title in sorted(interest_options, key=lambda option: option[1].lower())
+		]
+		self.selected_interest_title = None
+
+		interests_table.clear(columns=True)
+		interests_table.add_columns("Interest", "In Your Profile")
+		for title, selected in self.interest_rows:
+			interests_table.add_row(title, "Yes" if selected else "No")
+
+		students_table.add_class("hidden")
+		requests_table.add_class("hidden")
+		group_details.add_class("hidden")
+		send_button.add_class("hidden")
+		accept_button.add_class("hidden")
+		reject_button.add_class("hidden")
+		revoke_button.add_class("hidden")
+		self._set_students_view_mode(True)
+
+		if not self.interest_rows:
+			status.update("No interests found.")
+		elif info_message is not None:
+			status.update(info_message)
+		else:
+			status.update("Click an interest to select it, then click it again to toggle Yes/No.")
+
+		interests_table.remove_class("hidden")
+		interests_table.focus()
 
 	def _format_group_status(self) -> str:
 		lines = ["Current Group Status:"]
@@ -430,7 +502,7 @@ class LoginApp(App):
 			self.query_one("#view-students-button", Button),
 			self.query_one("#make-group-button", Button),
 			self.query_one("#view-requests-button", Button),
-			self.query_one("#change-preferences-button", Button),
+			self.query_one("#change-interests-button", Button),
 			self.query_one("#logout-button", Button),
 			self.query_one("#save-exit-button", Button),
 		)
@@ -450,6 +522,7 @@ class LoginApp(App):
 	def _return_to_menu(self) -> None:
 		table = self.query_one("#students-table", DataTable)
 		requests_table = self.query_one("#requests-table", DataTable)
+		interests_table = self.query_one("#interests-table", DataTable)
 		status = self.query_one("#menu-status", Label)
 		send_button = self.query_one("#send-request-button", Button)
 		accept_button = self.query_one("#accept-request-button", Button)
@@ -459,6 +532,7 @@ class LoginApp(App):
 
 		table.add_class("hidden")
 		requests_table.add_class("hidden")
+		interests_table.add_class("hidden")
 		send_button.add_class("hidden")
 		accept_button.add_class("hidden")
 		reject_button.add_class("hidden")
@@ -466,6 +540,7 @@ class LoginApp(App):
 		group_details.add_class("hidden")
 		self.selected_student_id = None
 		self.selected_request_id = None
+		self.selected_interest_title = None
 		self.request_table_mode = None
 		self._set_students_view_mode(False)
 		status.update("")
@@ -539,6 +614,52 @@ class LoginApp(App):
 		reject_button.remove_class("hidden")
 		status.update(f"Selected request from student {sender_id}. Choose Accept or Reject.")
 
+	def _handle_interest_row_selection(self, row_index: int) -> None:
+		if row_index < 0 or row_index >= len(self.interest_rows):
+			return
+
+		interest_title, is_in_profile = self.interest_rows[row_index]
+
+		if self.selected_interest_title == interest_title:
+			self._toggle_interest_selection(interest_title, is_in_profile)
+			return
+
+		self._preview_interest_row(row_index)
+
+	def _preview_interest_row(self, row_index: int) -> None:
+		status = self.query_one("#menu-status", Label)
+
+		if row_index < 0 or row_index >= len(self.interest_rows):
+			return
+
+		interest_title, is_in_profile = self.interest_rows[row_index]
+		self.selected_interest_title = interest_title
+		status_text = "currently in" if is_in_profile else "not in"
+		status.update(f"Selected {interest_title}. It is {status_text} your profile. Click again to toggle.")
+
+	def _toggle_interest_selection(self, interest_title: str, is_in_profile: bool) -> None:
+		if self.current_student is None or self.db_connection is None:
+			self.query_one("#menu-status", Label).update("No logged-in student found.")
+			return
+
+		if is_in_profile:
+			success, message = remove_interest_from_student(
+				self.db_connection,
+				int(self.current_student.id),
+				interest_title,
+			)
+		else:
+			success, message = add_interest_to_student(
+				self.db_connection,
+				int(self.current_student.id),
+				interest_title,
+			)
+
+		if success:
+			self._sync_current_student_interests()
+		self.selected_interest_title = None
+		self._show_change_interests_menu(message)
+
 	def _respond_to_selected_request(self, accept: bool) -> None:
 		status = self.query_one("#menu-status", Label)
 
@@ -586,6 +707,13 @@ class LoginApp(App):
 
 		status.update(f"Revoked request {self.selected_request_id}.")
 		self._show_outgoing_requests_for_revoke()
+
+	def _sync_current_student_interests(self) -> None:
+		if self.current_student is None or self.db_connection is None:
+			return
+
+		updated_interests = get_student_interest_titles(self.db_connection, int(self.current_student.id))
+		self.current_student.interests = updated_interests
 
 	def _logout(self) -> None:
 		login_panel = self.query_one("#login-panel", Container)
