@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .Student import Student
+from .roommateRequest import roommateRequest
 from .system import RoommateSystem
 
 
@@ -29,8 +30,161 @@ def bootstrap_database_and_system(
 	database_path: str | Path | None = None,
 ) -> tuple[sqlite3.Connection, RoommateSystem]:
 	connection = connect_database(database_path)
+	ensure_roommate_requests_table(connection)
 	system = create_system_from_database(connection)
 	return connection, system
+
+
+def ensure_roommate_requests_table(connection: sqlite3.Connection) -> None:
+	connection.execute(
+		"""
+		CREATE TABLE IF NOT EXISTS roommate_requests (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			sender_id INT NOT NULL,
+			receiver_id INT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending',
+			created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+			updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+		)
+		"""
+	)
+	connection.commit()
+
+
+def create_roommate_request(connection: sqlite3.Connection, request: roommateRequest) -> tuple[bool, str]:
+	ensure_roommate_requests_table(connection)
+
+	sender_id = int(request.getSenderId())
+	receiver_id = int(request.getReceiver1Id())
+
+	if sender_id == receiver_id:
+		return False, "You cannot send a request to yourself."
+
+	existing = connection.execute(
+		"""
+		SELECT id
+		FROM roommate_requests
+		WHERE sender_id = ? AND receiver_id = ? AND status = 'pending'
+		""",
+		(sender_id, receiver_id),
+	).fetchone()
+
+	if existing is not None:
+		return False, "A pending request already exists for this student."
+
+	connection.execute(
+		"""
+		INSERT INTO roommate_requests (sender_id, receiver_id, status)
+		VALUES (?, ?, 'pending')
+		""",
+		(sender_id, receiver_id),
+	)
+	connection.commit()
+	return True, "Roommate request sent."
+
+
+def get_incoming_roommate_requests(
+	connection: sqlite3.Connection,
+	receiver_id: int,
+) -> list[dict[str, Any]]:
+	ensure_roommate_requests_table(connection)
+
+	rows = connection.execute(
+		"""
+		SELECT rr.id, rr.sender_id, rr.receiver_id, rr.status, s.name
+		FROM roommate_requests AS rr
+		LEFT JOIN students AS s ON s.id = rr.sender_id
+		WHERE rr.receiver_id = ?
+		ORDER BY rr.created_at DESC, rr.id DESC
+		""",
+		(receiver_id,),
+	).fetchall()
+
+	requests: list[dict[str, Any]] = []
+	for request_id, sender_id, request_receiver_id, status, sender_name in rows:
+		request_model = roommateRequest(sender_id, request_receiver_id)
+		if status == "accepted":
+			request_model.accept_request()
+		elif status == "rejected":
+			request_model.reject_request()
+
+		requests.append(
+			{
+				"request_id": int(request_id),
+				"sender_name": str(sender_name) if sender_name is not None else f"Student {sender_id}",
+				"status": str(status),
+				"request": request_model,
+			}
+		)
+
+	return requests
+
+
+def respond_to_roommate_request(
+	connection: sqlite3.Connection,
+	request_id: int,
+	accept: bool,
+) -> bool:
+	ensure_roommate_requests_table(connection)
+	status = "accepted" if accept else "rejected"
+	result = connection.execute(
+		"""
+		UPDATE roommate_requests
+		SET status = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+		""",
+		(status, request_id),
+	)
+	connection.commit()
+	return result.rowcount > 0
+
+
+def get_group_status_for_student(
+	connection: sqlite3.Connection,
+	student_id: int,
+) -> list[dict[str, str]]:
+	ensure_roommate_requests_table(connection)
+
+	rows = connection.execute(
+		"""
+		SELECT rr.sender_id, rr.receiver_id, rr.status, sender.name, receiver.name
+		FROM roommate_requests AS rr
+		LEFT JOIN students AS sender ON sender.id = rr.sender_id
+		LEFT JOIN students AS receiver ON receiver.id = rr.receiver_id
+		WHERE rr.sender_id = ? OR rr.receiver_id = ?
+		ORDER BY rr.created_at DESC, rr.id DESC
+		""",
+		(student_id, student_id),
+	).fetchall()
+
+	members: dict[str, dict[str, str]] = {}
+	for sender_id, receiver_id, status, sender_name, receiver_name in rows:
+		sender_key = str(sender_id)
+		receiver_key = str(receiver_id)
+
+		if sender_key not in members:
+			members[sender_key] = {
+				"id": sender_key,
+				"name": str(sender_name) if sender_name is not None else f"Student {sender_id}",
+				"status": "Accepted",
+			}
+
+		receiver_status = "Pending"
+		if status == "accepted":
+			receiver_status = "Accepted"
+		elif status == "rejected":
+			receiver_status = "Rejected"
+
+		if receiver_key not in members:
+			members[receiver_key] = {
+				"id": receiver_key,
+				"name": str(receiver_name) if receiver_name is not None else f"Student {receiver_id}",
+				"status": receiver_status,
+			}
+		elif members[receiver_key]["status"] != "Accepted":
+			members[receiver_key]["status"] = receiver_status
+
+	return list(members.values())
 
 
 def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:

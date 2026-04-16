@@ -4,7 +4,14 @@ from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label
 
-from .databaseHelper import bootstrap_database_and_system
+from .databaseHelper import (
+	bootstrap_database_and_system,
+	create_roommate_request,
+	get_group_status_for_student,
+	get_incoming_roommate_requests,
+	respond_to_roommate_request,
+)
+from .roommateRequest import roommateRequest
 from .system import RoommateSystem
 
 
@@ -17,6 +24,8 @@ class LoginApp(App):
 	db_connection_error: bool = False
 	student_rows: list[tuple[str, str, str]] = []
 	selected_student_id: str | None = None
+	request_rows: list[dict[str, object]] = []
+	selected_request_id: int | None = None
 	group_members: list[dict[str, str]] = []
 
 	CSS = """
@@ -93,11 +102,15 @@ class LoginApp(App):
 			yield Label("", id="menu-welcome")
 			yield Button("View Other Students", id="view-students-button", variant="primary")
 			yield Button("View Group Status", id="make-group-button", variant="primary")
+			yield Button("View Roommate Requests", id="view-requests-button", variant="primary")
 			yield Button("Change Preferences", id="change-preferences-button", variant="primary")
 			yield Button("Return", id="return-button", variant="default", classes="hidden")
 			yield Label("", id="menu-status")
 			yield DataTable(id="students-table", classes="hidden")
+			yield DataTable(id="requests-table", classes="hidden")
 			yield Button("Send Roommate Request", id="send-request-button", variant="primary", classes="hidden")
+			yield Button("Accept Request", id="accept-request-button", variant="primary", classes="hidden")
+			yield Button("Reject Request", id="reject-request-button", variant="error", classes="hidden")
 			yield Label("", id="group-details", classes="hidden")
 		yield Footer()
 
@@ -124,22 +137,28 @@ class LoginApp(App):
 			self._return_to_menu()
 		elif event.button.id == "make-group-button":
 			self._show_group_status_menu()
+		elif event.button.id == "view-requests-button":
+			self._show_roommate_requests_menu()
 		elif event.button.id == "change-preferences-button":
 			self.query_one("#menu-status", Label).update("Opening preferences...")
 		elif event.button.id == "send-request-button":
 			self._send_roommate_request()
+		elif event.button.id == "accept-request-button":
+			self._respond_to_selected_request(True)
+		elif event.button.id == "reject-request-button":
+			self._respond_to_selected_request(False)
 
 	def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-		if event.data_table.id != "students-table":
-			return
-
-		self._handle_student_row_selection(event.cursor_row)
+		if event.data_table.id == "students-table":
+			self._handle_student_row_selection(event.cursor_row)
+		elif event.data_table.id == "requests-table":
+			self._handle_request_row_selection(event.cursor_row)
 
 	def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
-		if event.data_table.id != "students-table":
-			return
-
-		self._handle_student_row_selection(event.coordinate.row)
+		if event.data_table.id == "students-table":
+			self._handle_student_row_selection(event.coordinate.row)
+		elif event.data_table.id == "requests-table":
+			self._handle_request_row_selection(event.coordinate.row)
 
 	def action_login(self) -> None:
 		self._submit_login()
@@ -200,6 +219,7 @@ class LoginApp(App):
 	def _show_students_table(self) -> None:
 		status = self.query_one("#menu-status", Label)
 		table = self.query_one("#students-table", DataTable)
+		requests_table = self.query_one("#requests-table", DataTable)
 		group_details = self.query_one("#group-details", Label)
 
 		if self.db_connection_error or self.system is None:
@@ -221,7 +241,10 @@ class LoginApp(App):
 			status.update("Student list loaded. Select a student and press Enter.")
 
 		self._set_students_view_mode(True)
+		requests_table.add_class("hidden")
 		group_details.add_class("hidden")
+		self.query_one("#accept-request-button", Button).add_class("hidden")
+		self.query_one("#reject-request-button", Button).add_class("hidden")
 		self.query_one("#send-request-button", Button).add_class("hidden")
 		table.remove_class("hidden")
 		table.focus()
@@ -229,12 +252,21 @@ class LoginApp(App):
 	def _show_group_status_menu(self, info_message: str | None = None) -> None:
 		status = self.query_one("#menu-status", Label)
 		table = self.query_one("#students-table", DataTable)
+		requests_table = self.query_one("#requests-table", DataTable)
 		send_button = self.query_one("#send-request-button", Button)
+		accept_button = self.query_one("#accept-request-button", Button)
+		reject_button = self.query_one("#reject-request-button", Button)
 		group_details = self.query_one("#group-details", Label)
 
 		table.add_class("hidden")
+		requests_table.add_class("hidden")
 		send_button.add_class("hidden")
+		accept_button.add_class("hidden")
+		reject_button.add_class("hidden")
 		self._set_students_view_mode(True)
+
+		if self.current_student is not None and self.db_connection is not None:
+			self.group_members = get_group_status_for_student(self.db_connection, int(self.current_student.id))
 
 		if not self.group_members:
 			group_details.update("No group yet. Select a student in View Other Students and send a roommate request.")
@@ -244,6 +276,46 @@ class LoginApp(App):
 			status.update(info_message or "Group status loaded.")
 
 		group_details.remove_class("hidden")
+
+	def _show_roommate_requests_menu(self) -> None:
+		status = self.query_one("#menu-status", Label)
+		students_table = self.query_one("#students-table", DataTable)
+		requests_table = self.query_one("#requests-table", DataTable)
+		send_button = self.query_one("#send-request-button", Button)
+		accept_button = self.query_one("#accept-request-button", Button)
+		reject_button = self.query_one("#reject-request-button", Button)
+		group_details = self.query_one("#group-details", Label)
+
+		if self.current_student is None or self.db_connection is None:
+			status.update("No logged-in student found.")
+			return
+
+		self.request_rows = get_incoming_roommate_requests(self.db_connection, int(self.current_student.id))
+		self.selected_request_id = None
+
+		requests_table.clear(columns=True)
+		requests_table.add_columns("Request ID", "From", "Status")
+		for request_row in self.request_rows:
+			requests_table.add_row(
+				str(request_row["request_id"]),
+				str(request_row["sender_name"]),
+				str(request_row["status"]).capitalize(),
+			)
+
+		students_table.add_class("hidden")
+		group_details.add_class("hidden")
+		send_button.add_class("hidden")
+		accept_button.add_class("hidden")
+		reject_button.add_class("hidden")
+		self._set_students_view_mode(True)
+
+		if not self.request_rows:
+			status.update("No roommate requests found.")
+		else:
+			status.update("Select a request and press Enter to respond.")
+
+		requests_table.remove_class("hidden")
+		requests_table.focus()
 
 	def _format_group_status(self) -> str:
 		lines = ["Current Group Status:"]
@@ -269,6 +341,7 @@ class LoginApp(App):
 		menu_buttons = (
 			self.query_one("#view-students-button", Button),
 			self.query_one("#make-group-button", Button),
+			self.query_one("#view-requests-button", Button),
 			self.query_one("#change-preferences-button", Button),
 		)
 		return_button = self.query_one("#return-button", Button)
@@ -286,14 +359,21 @@ class LoginApp(App):
 
 	def _return_to_menu(self) -> None:
 		table = self.query_one("#students-table", DataTable)
+		requests_table = self.query_one("#requests-table", DataTable)
 		status = self.query_one("#menu-status", Label)
 		send_button = self.query_one("#send-request-button", Button)
+		accept_button = self.query_one("#accept-request-button", Button)
+		reject_button = self.query_one("#reject-request-button", Button)
 		group_details = self.query_one("#group-details", Label)
 
 		table.add_class("hidden")
+		requests_table.add_class("hidden")
 		send_button.add_class("hidden")
+		accept_button.add_class("hidden")
+		reject_button.add_class("hidden")
 		group_details.add_class("hidden")
 		self.selected_student_id = None
+		self.selected_request_id = None
 		self._set_students_view_mode(False)
 		status.update("")
 
@@ -325,18 +405,57 @@ class LoginApp(App):
 			status.update("Could not read selected student.")
 			return
 
-		self._add_or_update_group_member(
-			str(self.current_student.id),
-			self.current_student.name,
-			"Accepted",
-		)
-		self._add_or_update_group_member(
-			self.selected_student_id,
-			selected_name,
-			"Pending",
-		)
+		if self.db_connection is None:
+			status.update("Unable to connect to app.db.")
+			return
 
-		self._show_group_status_menu(f"Roommate request sent to {selected_name}.")
+		new_request = roommateRequest(int(self.current_student.id), int(self.selected_student_id))
+		success, message = create_roommate_request(self.db_connection, new_request)
+		if not success:
+			status.update(message)
+			return
+
+		self._show_group_status_menu(f"{message} Sent to {selected_name}.")
+
+	def _handle_request_row_selection(self, row_index: int) -> None:
+		status = self.query_one("#menu-status", Label)
+		accept_button = self.query_one("#accept-request-button", Button)
+		reject_button = self.query_one("#reject-request-button", Button)
+
+		if row_index < 0 or row_index >= len(self.request_rows):
+			return
+
+		selected_row = self.request_rows[row_index]
+		self.selected_request_id = int(selected_row["request_id"])
+		request_model = selected_row["request"]
+		if isinstance(request_model, roommateRequest):
+			sender_id = request_model.getSenderId()
+		else:
+			sender_id = "Unknown"
+
+		accept_button.remove_class("hidden")
+		reject_button.remove_class("hidden")
+		status.update(f"Selected request from student {sender_id}. Choose Accept or Reject.")
+
+	def _respond_to_selected_request(self, accept: bool) -> None:
+		status = self.query_one("#menu-status", Label)
+
+		if self.selected_request_id is None:
+			status.update("Select a request first.")
+			return
+
+		if self.db_connection is None:
+			status.update("Unable to connect to app.db.")
+			return
+
+		updated = respond_to_roommate_request(self.db_connection, self.selected_request_id, accept)
+		if not updated:
+			status.update("Could not update request status.")
+			return
+
+		result_text = "accepted" if accept else "rejected"
+		status.update(f"Request {self.selected_request_id} {result_text}.")
+		self._show_roommate_requests_menu()
 
 
 def main() -> None:
