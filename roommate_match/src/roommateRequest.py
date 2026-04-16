@@ -2,28 +2,26 @@ class roommateRequest:
    
     def __init__(self, sender_id, receiver1_id, receiver2_id=None, receiver3_id=None):
         self.sender_id = sender_id
-        self.receiver1_id = receiver1_id
-        self.receiver2_id = receiver2_id
-        self.receiver3_id = receiver3_id
+        self.receiver_ids = [r_id for r_id in [receiver1_id, receiver2_id, receiver3_id] if r_id is not None]
+        self.responses = {r_id: None for r_id in self.receiver_ids}
         self.accepted = None
 
-    def accept_request(self):
-        self.accepted = True
+    def accept_request(self, r_id):
+        self.responses[r_id] = True
 
-    def reject_request(self):
-        self.accepted = False
+    def reject_request(self, r_id):
+        self.responses[r_id] = False
 
-    def getStatus(self):
-        return self.accepted
+    def updateStatus(self):
+        if all(response == True for response in self.responses.values()):
+            self.accepted = True
+        elif any(response == False for response in self.responses.values()):
+            self.accepted = False
+        else:
+            self.accepted = None
     
     def getSenderId(self):
         return self.sender_id
     
-    def getReceiver1Id(self):
-        return self.receiver1_id
-
-    def getReceiver2Id(self):
-        return self.receiver2_id
-
-    def getReceiver3Id(self):
-        return self.receiver3_id
+    def getReceiverIds(self):
+        return self.receiver_ids
