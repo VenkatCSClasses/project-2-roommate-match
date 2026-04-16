@@ -7,6 +7,7 @@ class Student:
         self.hometown = hometown
         self.interests = []
         self.preferences = []
+        self.requests = []
         self.groupID = -1  # No group assigned
 
     #Get methods
