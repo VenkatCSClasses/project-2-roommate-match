@@ -75,8 +75,21 @@ class StudentTest(unittest.TestCase):
         self.assertIn("Bob", names)
         self.assertIn("Charlie", names)
 
-    def test_searchStudents(Self):
-        pass
+    def test_searchStudents(self):
+        system = RoommateSystem()
+        s1 = system.addStudent("Alice", "alice@test.com", "123", "NY")
+        s2 = system.addStudent("Bob", "bob@test.com", "123", "CA")
+
+        result = self.student1.searchStudents(str(s2.id), system)
+        self.assertIsInstance(result, Student)
+        self.assertEqual(result.name, "Bob")
+
+        with self.assertRaises(ValueError):
+            self.student1.searchStudents("999", system)
+
+        with self.assertRaises(ValueError):
+            self.student1.searchStudents("Alice", system)
+
 
 
 if __name__ == '__main__':
