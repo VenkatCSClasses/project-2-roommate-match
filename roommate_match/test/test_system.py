@@ -13,7 +13,7 @@ class TestRoommateSystem(unittest.TestCase):
     def test_remove_student(self):
         self.system.addStudent("Julia", "j@test.com", "123", "NY")
         student = self.system.getStudentByName("Julia")
-        self.system.removeStudent(student.id)
+        self.system.removeStudent(student[0].id)
         self.assertEqual(len(self.system.students), 0)
 
     def test_get_student_by_name(self):
