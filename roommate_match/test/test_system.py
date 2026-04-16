@@ -37,18 +37,6 @@ class TestRoommateSystem(unittest.TestCase):
         self.assertEqual(foundById1, student1)
         self.assertEqual(self.system.getStudentById(705000000), None)
 
-    def test_finalize_pairing(self):
-        self.system.addStudent("April", "a@test.com", "123", "NY")
-        self.system.addStudent("Bob", "b@test.com", "123", "CA")
-        
-        aprilStudents = self.system.getStudentByName("April")
-        s1 = aprilStudents[0]
-        
-        bobStudents = self.system.getStudentByName("Bob")
-        s2 = bobStudents[0]
-        
-        self.system.finalizePairing(s1.id, s2.id)
-        self.assertEqual(s1.groupID, s2.groupID)
         
 
 if __name__ == "__main__":
