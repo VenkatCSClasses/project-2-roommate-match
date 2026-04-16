@@ -104,6 +104,8 @@ class LoginApp(App):
 			yield Button("View Group Status", id="make-group-button", variant="primary")
 			yield Button("View Roommate Requests", id="view-requests-button", variant="primary")
 			yield Button("Change Preferences", id="change-preferences-button", variant="primary")
+			yield Button("Logout", id="logout-button", variant="default")
+			yield Button("Save and Exit", id="save-exit-button", variant="error")
 			yield Button("Return", id="return-button", variant="default", classes="hidden")
 			yield Label("", id="menu-status")
 			yield DataTable(id="students-table", classes="hidden")
@@ -141,6 +143,10 @@ class LoginApp(App):
 			self._show_roommate_requests_menu()
 		elif event.button.id == "change-preferences-button":
 			self.query_one("#menu-status", Label).update("Opening preferences...")
+		elif event.button.id == "logout-button":
+			self._logout()
+		elif event.button.id == "save-exit-button":
+			self._save_and_exit()
 		elif event.button.id == "send-request-button":
 			self._send_roommate_request()
 		elif event.button.id == "accept-request-button":
@@ -343,6 +349,8 @@ class LoginApp(App):
 			self.query_one("#make-group-button", Button),
 			self.query_one("#view-requests-button", Button),
 			self.query_one("#change-preferences-button", Button),
+			self.query_one("#logout-button", Button),
+			self.query_one("#save-exit-button", Button),
 		)
 		return_button = self.query_one("#return-button", Button)
 
@@ -456,6 +464,33 @@ class LoginApp(App):
 		result_text = "accepted" if accept else "rejected"
 		status.update(f"Request {self.selected_request_id} {result_text}.")
 		self._show_roommate_requests_menu()
+
+	def _logout(self) -> None:
+		login_panel = self.query_one("#login-panel", Container)
+		student_menu = self.query_one("#student-menu", Container)
+		login_status = self.query_one("#status", Label)
+		welcome = self.query_one("#menu-welcome", Label)
+		email_input = self.query_one("#email", Input)
+		password_input = self.query_one("#password", Input)
+
+		self._return_to_menu()
+		self.current_student = None
+		self.group_members = []
+		self.student_rows = []
+		self.request_rows = []
+
+		welcome.update("")
+		email_input.value = ""
+		password_input.value = ""
+		student_menu.add_class("hidden")
+		login_panel.remove_class("hidden")
+		login_status.update("Logged out.")
+		email_input.focus()
+
+	def _save_and_exit(self) -> None:
+		if self.db_connection is not None:
+			self.db_connection.commit()
+		self.exit()
 
 
 def main() -> None:
