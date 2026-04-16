@@ -126,9 +126,8 @@ def get_incoming_roommate_requests(
 
 	rows = connection.execute(
 		"""
-		SELECT rr.id, rr.sender_id, rr.receiver_id, rr.status, s.name
+		SELECT rr.id, rr.sender_id, rr.receiver_id, rr.status
 		FROM roommate_requests AS rr
-		LEFT JOIN students AS s ON s.id = rr.sender_id
 		WHERE rr.receiver_id = ? AND rr.status IN ('pending', 'accepted', 'rejected')
 		ORDER BY rr.created_at DESC, rr.id DESC
 		""",
@@ -136,7 +135,7 @@ def get_incoming_roommate_requests(
 	).fetchall()
 
 	requests: list[dict[str, Any]] = []
-	for request_id, sender_id, request_receiver_id, status, sender_name in rows:
+	for request_id, sender_id, request_receiver_id, status in rows:
 		request_model = roommateRequest(sender_id, request_receiver_id)
 		if status == "accepted":
 			request_model.accept_request()
@@ -146,7 +145,8 @@ def get_incoming_roommate_requests(
 		requests.append(
 			{
 				"request_id": int(request_id),
-				"sender_name": str(sender_name) if sender_name is not None else f"Student {sender_id}",
+				"sender_id": int(sender_id),
+				"receiver_id": int(request_receiver_id),
 				"status": str(status),
 				"request": request_model,
 			}
@@ -163,9 +163,8 @@ def get_outgoing_roommate_requests(
 
 	rows = connection.execute(
 		"""
-		SELECT rr.id, rr.sender_id, rr.receiver_id, rr.status, s.name
+		SELECT rr.id, rr.sender_id, rr.receiver_id, rr.status
 		FROM roommate_requests AS rr
-		LEFT JOIN students AS s ON s.id = rr.receiver_id
 		WHERE rr.sender_id = ? AND rr.status = 'pending'
 		ORDER BY rr.created_at DESC, rr.id DESC
 		""",
@@ -173,12 +172,13 @@ def get_outgoing_roommate_requests(
 	).fetchall()
 
 	requests: list[dict[str, Any]] = []
-	for request_id, request_sender_id, receiver_id, status, receiver_name in rows:
+	for request_id, request_sender_id, receiver_id, status in rows:
 		request_model = roommateRequest(request_sender_id, receiver_id)
 		requests.append(
 			{
 				"request_id": int(request_id),
-				"receiver_name": str(receiver_name) if receiver_name is not None else f"Student {receiver_id}",
+				"sender_id": int(request_sender_id),
+				"receiver_id": int(receiver_id),
 				"status": str(status),
 				"request": request_model,
 			}
@@ -214,10 +214,8 @@ def get_group_status_for_student(
 
 	rows = connection.execute(
 		"""
-		SELECT rr.sender_id, rr.receiver_id, rr.status, sender.name, receiver.name
+		SELECT rr.sender_id, rr.receiver_id, rr.status
 		FROM roommate_requests AS rr
-		LEFT JOIN students AS sender ON sender.id = rr.sender_id
-		LEFT JOIN students AS receiver ON receiver.id = rr.receiver_id
 		WHERE (rr.sender_id = ? OR rr.receiver_id = ?) AND rr.status IN ('pending', 'accepted')
 		ORDER BY rr.created_at DESC, rr.id DESC
 		""",
@@ -225,14 +223,13 @@ def get_group_status_for_student(
 	).fetchall()
 
 	members: dict[str, dict[str, str]] = {}
-	for sender_id, receiver_id, status, sender_name, receiver_name in rows:
+	for sender_id, receiver_id, status in rows:
 		sender_key = str(sender_id)
 		receiver_key = str(receiver_id)
 
 		if sender_key not in members:
 			members[sender_key] = {
 				"id": sender_key,
-				"name": str(sender_name) if sender_name is not None else f"Student {sender_id}",
 				"status": "Accepted",
 			}
 
@@ -245,7 +242,6 @@ def get_group_status_for_student(
 		if receiver_key not in members:
 			members[receiver_key] = {
 				"id": receiver_key,
-				"name": str(receiver_name) if receiver_name is not None else f"Student {receiver_id}",
 				"status": receiver_status,
 			}
 		elif members[receiver_key]["status"] != "Accepted":

@@ -12,7 +12,6 @@ from .databaseHelper import (
 	get_group_status_for_student,
 	get_incoming_roommate_requests,
 	get_outgoing_roommate_requests,
-	get_student_interest_titles,
 	revoke_outgoing_roommate_requests,
 	revoke_specific_outgoing_roommate_request,
 	remove_interest_from_student,
@@ -359,9 +358,10 @@ class LoginApp(App):
 		requests_table.clear(columns=True)
 		requests_table.add_columns("Request ID", "From", "Status")
 		for request_row in self.request_rows:
+			sender_name = self._student_name_from_id(int(request_row["sender_id"]))
 			requests_table.add_row(
 				str(request_row["request_id"]),
-				str(request_row["sender_name"]),
+				sender_name,
 				str(request_row["status"]).capitalize(),
 			)
 
@@ -404,9 +404,10 @@ class LoginApp(App):
 		requests_table.clear(columns=True)
 		requests_table.add_columns("Request ID", "To", "Status")
 		for request_row in self.request_rows:
+			receiver_name = self._student_name_from_id(int(request_row["receiver_id"]))
 			requests_table.add_row(
 				str(request_row["request_id"]),
-				str(request_row["receiver_name"]),
+				receiver_name,
 				str(request_row["status"]).capitalize(),
 			)
 
@@ -442,14 +443,12 @@ class LoginApp(App):
 			status.update("No logged-in student found.")
 			return
 
-		interest_options = get_interest_options(self.db_connection)
-		current_interest_titles = set(
-			get_student_interest_titles(self.db_connection, int(self.current_student.id))
-		)
+		interest_options = self._get_available_interest_titles()
+		current_interest_titles = set(self.current_student.interests)
 
 		self.interest_rows = [
 			(title, title in current_interest_titles)
-			for _, title in sorted(interest_options, key=lambda option: option[1].lower())
+			for title in sorted(interest_options, key=lambda interest_title: interest_title.lower())
 		]
 		self.selected_interest_title = None
 
@@ -480,7 +479,9 @@ class LoginApp(App):
 	def _format_group_status(self) -> str:
 		lines = ["Current Group Status:"]
 		for member in self.group_members:
-			lines.append(f"- {member['name']}: {member['status']}")
+			member_id = int(member["id"])
+			member_name = self._student_name_from_id(member_id)
+			lines.append(f"- {member_name}: {member['status']}")
 		return "\n".join(lines)
 
 	def _add_or_update_group_member(self, student_id: str, student_name: str, status: str) -> None:
@@ -492,10 +493,24 @@ class LoginApp(App):
 		self.group_members.append({"id": student_id, "name": student_name, "status": status})
 
 	def _selected_student_name(self) -> str | None:
+		if self.system is None or self.selected_student_id is None:
+			return None
+
+		student = self.system.getStudentById(int(self.selected_student_id))
+		if student is not None:
+			return student.name
+
 		for student_id, student_name, _ in self.student_rows:
 			if student_id == self.selected_student_id:
 				return student_name
 		return None
+
+	def _student_name_from_id(self, student_id: int) -> str:
+		if self.system is not None:
+			student = self.system.getStudentById(student_id)
+			if student is not None:
+				return student.name
+		return f"Student {student_id}"
 
 	def _set_students_view_mode(self, enabled: bool) -> None:
 		menu_buttons = (
@@ -656,7 +671,7 @@ class LoginApp(App):
 			)
 
 		if success:
-			self._sync_current_student_interests()
+			self._update_current_student_interest_state(interest_title, not is_in_profile)
 		self.selected_interest_title = None
 		self._show_change_interests_menu(message)
 
@@ -708,12 +723,29 @@ class LoginApp(App):
 		status.update(f"Revoked request {self.selected_request_id}.")
 		self._show_outgoing_requests_for_revoke()
 
-	def _sync_current_student_interests(self) -> None:
-		if self.current_student is None or self.db_connection is None:
+	def _get_available_interest_titles(self) -> list[str]:
+		if self.system is not None and self.system.interest_options:
+			return list(self.system.interest_options)
+
+		if self.db_connection is None:
+			return []
+
+		options = [title for _, title in get_interest_options(self.db_connection)]
+		if self.system is not None:
+			self.system.interest_options = list(options)
+		return options
+
+	def _update_current_student_interest_state(self, interest_title: str, should_have_interest: bool) -> None:
+		if self.current_student is None:
 			return
 
-		updated_interests = get_student_interest_titles(self.db_connection, int(self.current_student.id))
-		self.current_student.interests = updated_interests
+		current_interests = set(self.current_student.interests)
+		if should_have_interest:
+			current_interests.add(interest_title)
+		else:
+			current_interests.discard(interest_title)
+
+		self.current_student.interests = sorted(current_interests)
 
 	def _logout(self) -> None:
 		login_panel = self.query_one("#login-panel", Container)
