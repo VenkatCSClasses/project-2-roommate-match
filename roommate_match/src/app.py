@@ -5,7 +5,6 @@ from textual.containers import Container
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label
 
 from .databaseHelper import (
-	back_out_of_roommate_group,
 	bootstrap_database_and_system,
 	create_roommate_request,
 	get_group_status_for_student,
@@ -119,7 +118,6 @@ class LoginApp(App):
 			yield Button("Accept Request", id="accept-request-button", variant="primary", classes="hidden")
 			yield Button("Reject Request", id="reject-request-button", variant="error", classes="hidden")
 			yield Button("Revoke Pending Requests", id="revoke-request-button", variant="warning", classes="hidden")
-			yield Button("Back Out Of Group", id="backout-group-button", variant="warning", classes="hidden")
 			yield Label("", id="group-details", classes="hidden")
 		yield Footer()
 
@@ -164,8 +162,6 @@ class LoginApp(App):
 			self._respond_to_selected_request(False)
 		elif event.button.id == "revoke-request-button":
 			self._revoke_pending_requests()
-		elif event.button.id == "backout-group-button":
-			self._back_out_of_group()
 
 	def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
 		if event.data_table.id == "students-table":
@@ -287,7 +283,6 @@ class LoginApp(App):
 		self.query_one("#accept-request-button", Button).add_class("hidden")
 		self.query_one("#reject-request-button", Button).add_class("hidden")
 		self.query_one("#revoke-request-button", Button).add_class("hidden")
-		self.query_one("#backout-group-button", Button).add_class("hidden")
 		self.query_one("#send-request-button", Button).add_class("hidden")
 		table.remove_class("hidden")
 		table.focus()
@@ -300,7 +295,6 @@ class LoginApp(App):
 		accept_button = self.query_one("#accept-request-button", Button)
 		reject_button = self.query_one("#reject-request-button", Button)
 		revoke_button = self.query_one("#revoke-request-button", Button)
-		backout_button = self.query_one("#backout-group-button", Button)
 		group_details = self.query_one("#group-details", Label)
 
 		table.add_class("hidden")
@@ -309,7 +303,6 @@ class LoginApp(App):
 		accept_button.add_class("hidden")
 		reject_button.add_class("hidden")
 		revoke_button.remove_class("hidden")
-		backout_button.remove_class("hidden")
 		self.request_table_mode = None
 		self.selected_request_id = None
 		self._set_students_view_mode(True)
@@ -334,7 +327,6 @@ class LoginApp(App):
 		accept_button = self.query_one("#accept-request-button", Button)
 		reject_button = self.query_one("#reject-request-button", Button)
 		revoke_button = self.query_one("#revoke-request-button", Button)
-		backout_button = self.query_one("#backout-group-button", Button)
 		group_details = self.query_one("#group-details", Label)
 
 		if self.current_student is None or self.db_connection is None:
@@ -360,7 +352,6 @@ class LoginApp(App):
 		accept_button.add_class("hidden")
 		reject_button.add_class("hidden")
 		revoke_button.add_class("hidden")
-		backout_button.add_class("hidden")
 		self._set_students_view_mode(True)
 
 		if not self.request_rows:
@@ -379,7 +370,6 @@ class LoginApp(App):
 		accept_button = self.query_one("#accept-request-button", Button)
 		reject_button = self.query_one("#reject-request-button", Button)
 		revoke_button = self.query_one("#revoke-request-button", Button)
-		backout_button = self.query_one("#backout-group-button", Button)
 		group_details = self.query_one("#group-details", Label)
 
 		if self.current_student is None or self.db_connection is None:
@@ -404,7 +394,6 @@ class LoginApp(App):
 		send_button.add_class("hidden")
 		accept_button.add_class("hidden")
 		reject_button.add_class("hidden")
-		backout_button.add_class("hidden")
 		revoke_button.remove_class("hidden")
 		self._set_students_view_mode(True)
 
@@ -466,7 +455,6 @@ class LoginApp(App):
 		accept_button = self.query_one("#accept-request-button", Button)
 		reject_button = self.query_one("#reject-request-button", Button)
 		revoke_button = self.query_one("#revoke-request-button", Button)
-		backout_button = self.query_one("#backout-group-button", Button)
 		group_details = self.query_one("#group-details", Label)
 
 		table.add_class("hidden")
@@ -475,7 +463,6 @@ class LoginApp(App):
 		accept_button.add_class("hidden")
 		reject_button.add_class("hidden")
 		revoke_button.add_class("hidden")
-		backout_button.add_class("hidden")
 		group_details.add_class("hidden")
 		self.selected_student_id = None
 		self.selected_request_id = None
@@ -599,21 +586,6 @@ class LoginApp(App):
 
 		status.update(f"Revoked request {self.selected_request_id}.")
 		self._show_outgoing_requests_for_revoke()
-
-	def _back_out_of_group(self) -> None:
-		status = self.query_one("#menu-status", Label)
-
-		if self.current_student is None or self.db_connection is None:
-			status.update("No logged-in student found.")
-			return
-
-		updated_count = back_out_of_roommate_group(self.db_connection, int(self.current_student.id))
-		if updated_count == 0:
-			status.update("You are not in an accepted group to back out from.")
-		else:
-			status.update("You backed out of your accepted group connections.")
-
-		self._show_group_status_menu()
 
 	def _logout(self) -> None:
 		login_panel = self.query_one("#login-panel", Container)

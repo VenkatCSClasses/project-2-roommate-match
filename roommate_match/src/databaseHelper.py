@@ -287,16 +287,73 @@ def revoke_specific_outgoing_roommate_request(
 
 def back_out_of_roommate_group(connection: sqlite3.Connection, student_id: int) -> int:
 	ensure_roommate_requests_table(connection)
+
+	accepted_links = connection.execute(
+		"""
+		SELECT id, sender_id, receiver_id
+		FROM roommate_requests
+		WHERE status = 'accepted' AND (sender_id = ? OR receiver_id = ?)
+		""",
+		(student_id, student_id),
+	).fetchall()
+
+	other_member_ids: set[int] = set()
+	for _, sender_id, receiver_id in accepted_links:
+		if int(sender_id) == student_id and int(receiver_id) != student_id:
+			other_member_ids.add(int(receiver_id))
+		elif int(receiver_id) == student_id and int(sender_id) != student_id:
+			other_member_ids.add(int(sender_id))
+
 	result = connection.execute(
 		"""
 		UPDATE roommate_requests
 		SET status = 'withdrawn', updated_at = CURRENT_TIMESTAMP
-		WHERE status = 'accepted' AND (sender_id = ? OR receiver_id = ?)
+		WHERE status IN ('accepted', 'pending') AND (sender_id = ? OR receiver_id = ?)
 		""",
 		(student_id, student_id),
 	)
+
+	remaining_members = sorted(other_member_ids)
+	for index, left_member in enumerate(remaining_members):
+		for right_member in remaining_members[index + 1 :]:
+			_ensure_accepted_link_between(connection, left_member, right_member)
+
 	connection.commit()
 	return int(result.rowcount)
+
+
+def _ensure_accepted_link_between(connection: sqlite3.Connection, student_a: int, student_b: int) -> None:
+	existing = connection.execute(
+		"""
+		SELECT id, status
+		FROM roommate_requests
+		WHERE
+			((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?))
+			AND status IN ('pending', 'accepted')
+		LIMIT 1
+		""",
+		(student_a, student_b, student_b, student_a),
+	).fetchone()
+
+	if existing is not None:
+		if str(existing[1]) == 'pending':
+			connection.execute(
+				"""
+				UPDATE roommate_requests
+				SET status = 'accepted', updated_at = CURRENT_TIMESTAMP
+				WHERE id = ?
+				""",
+				(int(existing[0]),),
+			)
+		return
+
+	connection.execute(
+		"""
+		INSERT INTO roommate_requests (sender_id, receiver_id, status)
+		VALUES (?, ?, 'accepted')
+		""",
+		(student_a, student_b),
+	)
 
 
 def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
