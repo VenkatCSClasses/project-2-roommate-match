@@ -61,7 +61,11 @@ def create_roommate_request(connection: sqlite3.Connection, request: roommateReq
 		return False, "You cannot send a request to yourself."
 
 	outgoing_count_row = connection.execute(
-		"SELECT COUNT(*) FROM roommate_requests WHERE sender_id = ?",
+		"""
+		SELECT COUNT(*)
+		FROM roommate_requests
+		WHERE sender_id = ? AND status IN ('pending', 'accepted')
+		""",
 		(sender_id,),
 	).fetchone()
 	outgoing_count = int(outgoing_count_row[0]) if outgoing_count_row is not None else 0
@@ -124,7 +128,7 @@ def get_incoming_roommate_requests(
 		SELECT rr.id, rr.sender_id, rr.receiver_id, rr.status, s.name
 		FROM roommate_requests AS rr
 		LEFT JOIN students AS s ON s.id = rr.sender_id
-		WHERE rr.receiver_id = ?
+		WHERE rr.receiver_id = ? AND rr.status IN ('pending', 'accepted', 'rejected')
 		ORDER BY rr.created_at DESC, rr.id DESC
 		""",
 		(receiver_id,),
@@ -142,6 +146,38 @@ def get_incoming_roommate_requests(
 			{
 				"request_id": int(request_id),
 				"sender_name": str(sender_name) if sender_name is not None else f"Student {sender_id}",
+				"status": str(status),
+				"request": request_model,
+			}
+		)
+
+	return requests
+
+
+def get_outgoing_roommate_requests(
+	connection: sqlite3.Connection,
+	sender_id: int,
+) -> list[dict[str, Any]]:
+	ensure_roommate_requests_table(connection)
+
+	rows = connection.execute(
+		"""
+		SELECT rr.id, rr.sender_id, rr.receiver_id, rr.status, s.name
+		FROM roommate_requests AS rr
+		LEFT JOIN students AS s ON s.id = rr.receiver_id
+		WHERE rr.sender_id = ? AND rr.status = 'pending'
+		ORDER BY rr.created_at DESC, rr.id DESC
+		""",
+		(sender_id,),
+	).fetchall()
+
+	requests: list[dict[str, Any]] = []
+	for request_id, request_sender_id, receiver_id, status, receiver_name in rows:
+		request_model = roommateRequest(request_sender_id, receiver_id)
+		requests.append(
+			{
+				"request_id": int(request_id),
+				"receiver_name": str(receiver_name) if receiver_name is not None else f"Student {receiver_id}",
 				"status": str(status),
 				"request": request_model,
 			}
@@ -181,7 +217,7 @@ def get_group_status_for_student(
 		FROM roommate_requests AS rr
 		LEFT JOIN students AS sender ON sender.id = rr.sender_id
 		LEFT JOIN students AS receiver ON receiver.id = rr.receiver_id
-		WHERE rr.sender_id = ? OR rr.receiver_id = ?
+		WHERE (rr.sender_id = ? OR rr.receiver_id = ?) AND rr.status IN ('pending', 'accepted')
 		ORDER BY rr.created_at DESC, rr.id DESC
 		""",
 		(student_id, student_id),
@@ -215,6 +251,52 @@ def get_group_status_for_student(
 			members[receiver_key]["status"] = receiver_status
 
 	return list(members.values())
+
+
+def revoke_outgoing_roommate_requests(connection: sqlite3.Connection, sender_id: int) -> int:
+	ensure_roommate_requests_table(connection)
+	result = connection.execute(
+		"""
+		UPDATE roommate_requests
+		SET status = 'revoked', updated_at = CURRENT_TIMESTAMP
+		WHERE sender_id = ? AND status = 'pending'
+		""",
+		(sender_id,),
+	)
+	connection.commit()
+	return int(result.rowcount)
+
+
+def revoke_specific_outgoing_roommate_request(
+	connection: sqlite3.Connection,
+	sender_id: int,
+	request_id: int,
+) -> bool:
+	ensure_roommate_requests_table(connection)
+	result = connection.execute(
+		"""
+		UPDATE roommate_requests
+		SET status = 'revoked', updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND sender_id = ? AND status = 'pending'
+		""",
+		(request_id, sender_id),
+	)
+	connection.commit()
+	return result.rowcount > 0
+
+
+def back_out_of_roommate_group(connection: sqlite3.Connection, student_id: int) -> int:
+	ensure_roommate_requests_table(connection)
+	result = connection.execute(
+		"""
+		UPDATE roommate_requests
+		SET status = 'withdrawn', updated_at = CURRENT_TIMESTAMP
+		WHERE status = 'accepted' AND (sender_id = ? OR receiver_id = ?)
+		""",
+		(student_id, student_id),
+	)
+	connection.commit()
+	return int(result.rowcount)
 
 
 def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
