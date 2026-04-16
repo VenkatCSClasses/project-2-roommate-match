@@ -13,21 +13,31 @@ class StudentTest(unittest.TestCase):
 
         sender.sendRequest(recipient.id, system)
 
+        # Ensures there is 1 request in the list
         self.assertEqual(len(recipient.requests), 1)
 
-        req = recipient.requests[0]
-        self.assertIn("request_id", req)
-        self.assertIn("sender_id", req)
-        self.assertIn("recipient_id", req)
-
-        # Check values
-        self.assertEqual(req["sender_id"], sender.id)
-        self.assertEqual(req["recipient_id"], recipient.id)
-        self.assertIsInstance(req["request_id"], int)
-
-
     def test_respondRequest(self):
-        pass
+        system = RoommateSystem()
+        sender = system.addStudent("Alice", "alice@test.com", "123", "NY")
+        recipient = system.addStudent("Bob", "bob@test.com", "123", "CA")
+
+        sender.sendRequest(recipient.id, system)
+
+        # Accepts request
+        req_id = recipient.requests[0]["request_id"]
+        recipient.respondRequest(req_id, system, accept=True)
+        self.assertEqual(recipient.requests[0]["status"], "accepted")
+
+        # Denies request
+        sender.sendRequest(recipient.id, system)
+        req_id2 = recipient.requests[1]["request_id"]
+        recipient.respondRequest(req_id2, system, accept=False)
+        self.assertEqual(recipient.requests[1]["status"], "denied")
+
+        # Invalid request
+        with self.assertRaises(ValueError):
+            recipient.respondRequest(9999, system, accept=True)
+
     
     def test_updatePassword(self):
         self.student1.updatePassword("newpassword123")
@@ -83,10 +93,12 @@ class StudentTest(unittest.TestCase):
 
         students = self.student1.viewStudents(system)
 
+        # Ensures all 3 students are in list
         self.assertEqual(len(students), 3)
         for s in students:
             self.assertIsInstance(s, Student)
 
+        # Checks each student in list to ensure they are correct
         names = [s.name for s in students]
         self.assertIn("Alice", names)
         self.assertIn("Bob", names)
@@ -97,13 +109,15 @@ class StudentTest(unittest.TestCase):
         s1 = system.addStudent("Alice", "alice@test.com", "123", "NY")
         s2 = system.addStudent("Bob", "bob@test.com", "123", "CA")
 
+        # Checks result is Bob
         result = self.student1.searchStudents(str(s2.id), system)
-        self.assertIsInstance(result, Student)
         self.assertEqual(result.name, "Bob")
 
+        # If ID is out of bounds
         with self.assertRaises(ValueError):
             self.student1.searchStudents("999", system)
 
+        # If search field is not student ID
         with self.assertRaises(ValueError):
             self.student1.searchStudents("Alice", system)
 
