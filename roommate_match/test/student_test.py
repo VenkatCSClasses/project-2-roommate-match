@@ -1,6 +1,6 @@
 import unittest
-from roommate_match.src.Student import Student
-from roommate_match.src.system import RoommateSystem
+from src.Student import Student
+from src.system import RoommateSystem
 
 class StudentTest(unittest.TestCase):
     student1 = Student(123, "John Doe", "john.doe@example.com", "password123", "New York")

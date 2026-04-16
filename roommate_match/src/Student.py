@@ -1,5 +1,3 @@
-from src.system import RoommateSystem
-
 class Student:
     def __init__(self, id: int, name: str, email: str, password: str, hometown: str):
         self.id = id
