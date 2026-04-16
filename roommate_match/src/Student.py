@@ -1,3 +1,5 @@
+from src.system import RoommateSystem
+
 class Student:
     def __init__(self, id: int, name: str, email: str, password: str, hometown: str):
         self.id = id
@@ -12,23 +14,28 @@ class Student:
     #Get methods
     def getID(self):
         #Return the student's ID
-        pass
+        
+        return self.id
 
     def getName(self):
         #Return the student's name
-        pass
+        
+        return self.name
 
     def getEmail(self):
         #Return the student's email
-        pass
+        
+        return self.email
 
     def getPassword(self):
         #Return the student's password
-        pass
+        
+        return self.password
 
     def getHometown(self):
         #Return the student's hometown
-        pass
+        
+        return self.hometown
 
 
 

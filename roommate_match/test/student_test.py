@@ -1,5 +1,6 @@
 import unittest
 from roommate_match.src.Student import Student
+from roommate_match.src.system import RoommateSystem
 
 class StudentTest(unittest.TestCase):
     student1 = Student(123, "John Doe", "john.doe@example.com", "password123", "New York")
@@ -57,8 +58,22 @@ class StudentTest(unittest.TestCase):
     def test_updatePreferences(self):
         pass
 
-    def test_viewStudents(Self):
-        pass
+    def test_viewStudents(self):
+        system = RoommateSystem()
+        system.addStudent("Alice", "alice@test.com", "123", "NY")
+        system.addStudent("Bob", "bob@test.com", "123", "CA")
+        system.addStudent("Charlie", "charlie@test.com", "123", "TX")
+
+        students = self.student1.viewStudents(system)
+
+        self.assertEqual(len(students), 3)
+        for s in students:
+            self.assertIsInstance(s, Student)
+
+        names = [s.name for s in students]
+        self.assertIn("Alice", names)
+        self.assertIn("Bob", names)
+        self.assertIn("Charlie", names)
 
     def test_searchStudents(Self):
         pass
