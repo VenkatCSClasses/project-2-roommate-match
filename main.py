@@ -1,6 +1,6 @@
 """Project entrypoint."""
 
-from roommate_match.src.cli import main as run_app
+from roommate_match.src.app import main as run_app
 
 
 def main() -> None:

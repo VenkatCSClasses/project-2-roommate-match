@@ -270,7 +270,6 @@ class LoginApp(App):
 
 
 def main() -> None:
-	#TODO: load database
 	LoginApp().run()
 
 
