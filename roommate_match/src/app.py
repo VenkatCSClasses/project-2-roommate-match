@@ -131,6 +131,8 @@ class LoginApp(App):
 			self.db_connection = None
 			self.system = RoommateSystem()
 			self.db_connection_error = True
+		self.query_one("#students-table", DataTable).cursor_type = "row"
+		self.query_one("#requests-table", DataTable).cursor_type = "row"
 		self.query_one("#email", Input).focus()
 
 	def on_unmount(self) -> None:
@@ -176,6 +178,26 @@ class LoginApp(App):
 			self._handle_student_row_selection(event.coordinate.row)
 		elif event.data_table.id == "requests-table":
 			self._handle_request_row_selection(event.coordinate.row)
+
+	def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+		row_index = event.data_table.cursor_row
+		if row_index < 0:
+			return
+
+		if event.data_table.id == "students-table":
+			self._handle_student_row_selection(row_index)
+		elif event.data_table.id == "requests-table":
+			self._handle_request_row_selection(row_index)
+
+	def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
+		row_index = event.coordinate.row
+		if row_index < 0:
+			return
+
+		if event.data_table.id == "students-table":
+			self._handle_student_row_selection(row_index)
+		elif event.data_table.id == "requests-table":
+			self._handle_request_row_selection(row_index)
 
 	def action_login(self) -> None:
 		self._submit_login()
@@ -257,7 +279,7 @@ class LoginApp(App):
 		if not students:
 			status.update("No students found in the database.")
 		else:
-			status.update("Student list loaded. Select a student and press Enter.")
+			status.update("Student list loaded. Click a student to show actions.")
 
 		self._set_students_view_mode(True)
 		requests_table.add_class("hidden")
@@ -344,7 +366,7 @@ class LoginApp(App):
 		if not self.request_rows:
 			status.update("No roommate requests found.")
 		else:
-			status.update("Select a request and press Enter to respond.")
+			status.update("Select a request to show response actions.")
 
 		requests_table.remove_class("hidden")
 		requests_table.focus()
@@ -389,7 +411,7 @@ class LoginApp(App):
 		if not self.request_rows:
 			status.update("No pending outgoing requests to revoke.")
 		else:
-			status.update("Select an outgoing request and click Revoke Pending Requests.")
+			status.update("Select an outgoing request, then click Revoke Pending Requests.")
 
 		requests_table.remove_class("hidden")
 		requests_table.focus()
