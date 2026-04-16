@@ -60,6 +60,21 @@ def create_roommate_request(connection: sqlite3.Connection, request: roommateReq
 	if sender_id == receiver_id:
 		return False, "You cannot send a request to yourself."
 
+	outgoing_count_row = connection.execute(
+		"SELECT COUNT(*) FROM roommate_requests WHERE sender_id = ?",
+		(sender_id,),
+	).fetchone()
+	outgoing_count = int(outgoing_count_row[0]) if outgoing_count_row is not None else 0
+	if outgoing_count >= 10:
+		return False, "You cannot send more than 10 outgoing roommate requests."
+
+	current_group_member_ids = _get_sender_group_member_ids(connection, sender_id)
+	if len(current_group_member_ids) >= 4 and receiver_id not in current_group_member_ids:
+		return False, "Group is full. A group can have at most 4 people."
+
+	if receiver_id in current_group_member_ids:
+		return False, "This student is already in your group or pending group requests."
+
 	existing = connection.execute(
 		"""
 		SELECT id
@@ -81,6 +96,21 @@ def create_roommate_request(connection: sqlite3.Connection, request: roommateReq
 	)
 	connection.commit()
 	return True, "Roommate request sent."
+
+
+def _get_sender_group_member_ids(connection: sqlite3.Connection, sender_id: int) -> set[int]:
+	rows = connection.execute(
+		"""
+		SELECT receiver_id
+		FROM roommate_requests
+		WHERE sender_id = ? AND status IN ('pending', 'accepted')
+		""",
+		(sender_id,),
+	).fetchall()
+
+	member_ids = {sender_id}
+	member_ids.update(int(row[0]) for row in rows)
+	return member_ids
 
 
 def get_incoming_roommate_requests(
