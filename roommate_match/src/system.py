@@ -4,9 +4,10 @@ from .Student import Student
 class RoommateSystem:
     def __init__(self):
         self.students = []
-        #self.matches = []
         self.preference_options = []
         self.interest_options = []
+        self.pairings = []
+        self.requests = []
 
     def generateId(self):
         newId = int("705" + str(randint(100000, 999999)))
