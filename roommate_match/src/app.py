@@ -13,9 +13,11 @@ class LoginApp(App):
 
 	db_connection = None
 	system: RoommateSystem | None = None
+	current_student = None
 	db_connection_error: bool = False
 	student_rows: list[tuple[str, str, str]] = []
 	selected_student_id: str | None = None
+	group_members: list[dict[str, str]] = []
 
 	CSS = """
 	Screen {
@@ -90,12 +92,13 @@ class LoginApp(App):
 			yield Label("Student Menu", id="title")
 			yield Label("", id="menu-welcome")
 			yield Button("View Other Students", id="view-students-button", variant="primary")
-			yield Button("Make Group", id="make-group-button", variant="primary")
+			yield Button("View Group Status", id="make-group-button", variant="primary")
 			yield Button("Change Preferences", id="change-preferences-button", variant="primary")
 			yield Button("Return", id="return-button", variant="default", classes="hidden")
 			yield Label("", id="menu-status")
 			yield DataTable(id="students-table", classes="hidden")
 			yield Button("Send Roommate Request", id="send-request-button", variant="primary", classes="hidden")
+			yield Label("", id="group-details", classes="hidden")
 		yield Footer()
 
 	def on_mount(self) -> None:
@@ -120,7 +123,7 @@ class LoginApp(App):
 		elif event.button.id == "return-button":
 			self._return_to_menu()
 		elif event.button.id == "make-group-button":
-			self.query_one("#menu-status", Label).update("Opening group creation...")
+			self._show_group_status_menu()
 		elif event.button.id == "change-preferences-button":
 			self.query_one("#menu-status", Label).update("Opening preferences...")
 		elif event.button.id == "send-request-button":
@@ -159,6 +162,8 @@ class LoginApp(App):
 			status.update("Invalid email or password.")
 			return
 
+		self.current_student = student
+		self.group_members = []
 		status.update(f"Signed in as {student.name}.")
 		self._show_student_menu(student.name)
 
@@ -186,6 +191,8 @@ class LoginApp(App):
 
 		rows: list[tuple[str, str, str]] = []
 		for student in sorted(self.system.students, key=lambda s: s.name.lower()):
+			if self.current_student is not None and student.id == self.current_student.id:
+				continue
 			interests = ", ".join(student.interests) if student.interests else "No interests"
 			rows.append((str(student.id), str(student.name), interests))
 		return rows
@@ -193,6 +200,7 @@ class LoginApp(App):
 	def _show_students_table(self) -> None:
 		status = self.query_one("#menu-status", Label)
 		table = self.query_one("#students-table", DataTable)
+		group_details = self.query_one("#group-details", Label)
 
 		if self.db_connection_error or self.system is None:
 			status.update("Unable to connect to app.db.")
@@ -213,9 +221,49 @@ class LoginApp(App):
 			status.update("Student list loaded. Select a student and press Enter.")
 
 		self._set_students_view_mode(True)
+		group_details.add_class("hidden")
 		self.query_one("#send-request-button", Button).add_class("hidden")
 		table.remove_class("hidden")
 		table.focus()
+
+	def _show_group_status_menu(self, info_message: str | None = None) -> None:
+		status = self.query_one("#menu-status", Label)
+		table = self.query_one("#students-table", DataTable)
+		send_button = self.query_one("#send-request-button", Button)
+		group_details = self.query_one("#group-details", Label)
+
+		table.add_class("hidden")
+		send_button.add_class("hidden")
+		self._set_students_view_mode(True)
+
+		if not self.group_members:
+			group_details.update("No group yet. Select a student in View Other Students and send a roommate request.")
+			status.update("No group created yet.")
+		else:
+			group_details.update(self._format_group_status())
+			status.update(info_message or "Group status loaded.")
+
+		group_details.remove_class("hidden")
+
+	def _format_group_status(self) -> str:
+		lines = ["Current Group Status:"]
+		for member in self.group_members:
+			lines.append(f"- {member['name']}: {member['status']}")
+		return "\n".join(lines)
+
+	def _add_or_update_group_member(self, student_id: str, student_name: str, status: str) -> None:
+		for member in self.group_members:
+			if member["id"] == student_id:
+				member["status"] = status
+				return
+
+		self.group_members.append({"id": student_id, "name": student_name, "status": status})
+
+	def _selected_student_name(self) -> str | None:
+		for student_id, student_name, _ in self.student_rows:
+			if student_id == self.selected_student_id:
+				return student_name
+		return None
 
 	def _set_students_view_mode(self, enabled: bool) -> None:
 		menu_buttons = (
@@ -240,9 +288,11 @@ class LoginApp(App):
 		table = self.query_one("#students-table", DataTable)
 		status = self.query_one("#menu-status", Label)
 		send_button = self.query_one("#send-request-button", Button)
+		group_details = self.query_one("#group-details", Label)
 
 		table.add_class("hidden")
 		send_button.add_class("hidden")
+		group_details.add_class("hidden")
 		self.selected_student_id = None
 		self._set_students_view_mode(False)
 		status.update("")
@@ -266,7 +316,27 @@ class LoginApp(App):
 			status.update("Select a student first.")
 			return
 
-		status.update(f"Roommate request sent to student {self.selected_student_id}.")
+		if self.current_student is None:
+			status.update("No logged-in student found.")
+			return
+
+		selected_name = self._selected_student_name()
+		if selected_name is None:
+			status.update("Could not read selected student.")
+			return
+
+		self._add_or_update_group_member(
+			str(self.current_student.id),
+			self.current_student.name,
+			"Accepted",
+		)
+		self._add_or_update_group_member(
+			self.selected_student_id,
+			selected_name,
+			"Pending",
+		)
+
+		self._show_group_status_menu(f"Roommate request sent to {selected_name}.")
 
 
 def main() -> None:
