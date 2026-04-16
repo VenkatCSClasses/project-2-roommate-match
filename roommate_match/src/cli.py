@@ -1,17 +1,18 @@
 """Textual user interface for the roommate matching project."""
 
-import sqlite3
-from pathlib import Path
-
 from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label
+
+from .databaseHelper import bootstrap_database_and_system
+from .system import RoommateSystem
 
 
 class LoginApp(App):
 	"""A simple login screen with email and password fields."""
 
-	db_connection: sqlite3.Connection | None = None
+	db_connection = None
+	system: RoommateSystem | None = None
 	db_connection_error: bool = False
 
 	CSS = """
@@ -94,7 +95,13 @@ class LoginApp(App):
 		yield Footer()
 
 	def on_mount(self) -> None:
-		self._connect_database()
+		try:
+			self.db_connection, self.system = bootstrap_database_and_system()
+			self.db_connection_error = False
+		except Exception:
+			self.db_connection = None
+			self.system = RoommateSystem()
+			self.db_connection_error = True
 		self.query_one("#email", Input).focus()
 
 	def on_unmount(self) -> None:
@@ -123,9 +130,17 @@ class LoginApp(App):
 			status.update("Please enter both an email and password.")
 			return
 
-		# TODO: check email and username in database
-		status.update(f"Signed in as {email}.")
-		self._show_student_menu(email)
+		if self.db_connection_error:
+			status.update("Unable to connect to app.db.")
+			return
+
+		student = self._authenticate_student(email, password)
+		if student is None:
+			status.update("Invalid email or password.")
+			return
+
+		status.update(f"Signed in as {student.name}.")
+		self._show_student_menu(student.name)
 
 	def _show_student_menu(self, email: str) -> None:
 		login_panel = self.query_one("#login-panel", Container)
@@ -136,41 +151,30 @@ class LoginApp(App):
 		login_panel.add_class("hidden")
 		student_menu.remove_class("hidden")
 
-	def _connect_database(self) -> None:
-		database_path = Path(__file__).resolve().parents[2] / "app.db"
-		try:
-			self.db_connection = sqlite3.connect(database_path)
-			self.db_connection_error = False
-		except sqlite3.Error:
-			self.db_connection = None
-			self.db_connection_error = True
+	def _authenticate_student(self, email: str, password: str):
+		if self.system is None:
+			return None
+
+		for student in self.system.students:
+			if student.email == email and student.password == password:
+				return student
+		return None
 
 	def _fetch_students_with_interests(self) -> list[tuple[str, str, str]]:
-		if self.db_connection is None:
+		if self.system is None:
 			return []
 
-		query = """
-		SELECT
-			CAST(s.id AS TEXT) AS student_id,
-			s.name,
-			COALESCE(GROUP_CONCAT(i.title, ', '), 'No interests') AS interests
-		FROM students AS s
-		LEFT JOIN students_to_interests AS sti ON sti.student_id = s.id
-		LEFT JOIN interests AS i ON i.id = sti.interest_id
-		WHERE LOWER(CAST(s.id AS TEXT)) != 'student_id'
-		GROUP BY s.id, s.name
-		ORDER BY s.name ASC
-		"""
-
-		cursor = self.db_connection.cursor()
-		rows = cursor.execute(query).fetchall()
-		return [(str(row[0]), str(row[1]), str(row[2])) for row in rows]
+		rows: list[tuple[str, str, str]] = []
+		for student in sorted(self.system.students, key=lambda s: s.name.lower()):
+			interests = ", ".join(student.interests) if student.interests else "No interests"
+			rows.append((str(student.id), str(student.name), interests))
+		return rows
 
 	def _show_students_table(self) -> None:
 		status = self.query_one("#menu-status", Label)
 		table = self.query_one("#students-table", DataTable)
 
-		if self.db_connection_error or self.db_connection is None:
+		if self.db_connection_error or self.system is None:
 			status.update("Unable to connect to app.db.")
 			return
 
