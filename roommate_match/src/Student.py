@@ -38,7 +38,7 @@ class Student:
 
 
 
-    def sendRequest(self, other_student):
+    def sendRequest(self, recipient, system):
         #Send a roommate request to another student using their student ID only
         pass
 

@@ -7,7 +7,24 @@ class StudentTest(unittest.TestCase):
     student2 = Student(234, "Jane Smith", "jane.smith@example.com", "password456", "Los Angeles")
 
     def test_sendRequest(self):
-        pass
+        system = RoommateSystem()
+        sender = system.addStudent("Alice", "alice@test.com", "123", "NY")
+        recipient = system.addStudent("Bob", "bob@test.com", "123", "CA")
+
+        sender.sendRequest(recipient.id, system)
+
+        self.assertEqual(len(recipient.requests), 1)
+
+        req = recipient.requests[0]
+        self.assertIn("request_id", req)
+        self.assertIn("sender_id", req)
+        self.assertIn("recipient_id", req)
+
+        # Check values
+        self.assertEqual(req["sender_id"], sender.id)
+        self.assertEqual(req["recipient_id"], recipient.id)
+        self.assertIsInstance(req["request_id"], int)
+
 
     def test_respondRequest(self):
         pass
