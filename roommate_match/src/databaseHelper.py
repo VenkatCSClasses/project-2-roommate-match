@@ -41,6 +41,7 @@ def ensure_roommate_requests_table(connection: sqlite3.Connection) -> None:
 		"""
 		CREATE TABLE IF NOT EXISTS roommate_requests (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			group_request_id INTEGER NOT NULL DEFAULT 0,
 			sender_id INT NOT NULL,
 			receiver_id INT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'pending',
@@ -49,17 +50,60 @@ def ensure_roommate_requests_table(connection: sqlite3.Connection) -> None:
 		)
 		"""
 	)
+	_request_add_column_if_missing(connection, "roommate_requests", "group_request_id", "INTEGER NOT NULL DEFAULT 0")
+	connection.execute(
+		"UPDATE roommate_requests SET group_request_id = id WHERE group_request_id = 0"
+	)
 	connection.commit()
+
+
+def _request_add_column_if_missing(
+	connection: sqlite3.Connection,
+	table_name: str,
+	column_name: str,
+	column_definition: str,
+) -> None:
+	columns = _table_columns(connection, table_name)
+	if column_name in columns:
+		return
+
+	connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}")
 
 
 def create_roommate_request(connection: sqlite3.Connection, request: roommateRequest) -> tuple[bool, str]:
 	ensure_roommate_requests_table(connection)
 
 	sender_id = int(request.getSenderId())
-	receiver_id = int(request.getReceiver1Id())
+	receiver_ids = [int(receiver_id) for receiver_id in request.getReceiverIds()]
 
-	if sender_id == receiver_id:
+	if len(receiver_ids) == 0:
+		return False, "Select at least one student."
+
+	if len(receiver_ids) > 3:
+		return False, "A group request can have at most 3 other students."
+
+	if sender_id in receiver_ids:
 		return False, "You cannot send a request to yourself."
+
+	receiver_ids = list(dict.fromkeys(receiver_ids))
+	if len(receiver_ids) == 0:
+		return False, "Select at least one student."
+
+	group_size = 1 + len(receiver_ids)
+	if group_size > 4:
+		return False, "A group can have at most 4 people."
+
+	active_batch_row = connection.execute(
+		"""
+		SELECT COUNT(DISTINCT group_request_id)
+		FROM roommate_requests
+		WHERE sender_id = ? AND status IN ('pending', 'accepted')
+		""",
+		(sender_id,),
+	).fetchone()
+	active_batches = int(active_batch_row[0]) if active_batch_row is not None else 0
+	if active_batches >= 1:
+		return False, "You already have an active roommate request group."
 
 	outgoing_count_row = connection.execute(
 		"""
@@ -70,35 +114,24 @@ def create_roommate_request(connection: sqlite3.Connection, request: roommateReq
 		(sender_id,),
 	).fetchone()
 	outgoing_count = int(outgoing_count_row[0]) if outgoing_count_row is not None else 0
-	if outgoing_count >= 10:
+	if outgoing_count + len(receiver_ids) > 10:
 		return False, "You cannot send more than 10 outgoing roommate requests."
 
 	current_group_member_ids = _get_sender_group_member_ids(connection, sender_id)
-	if len(current_group_member_ids) >= 4 and receiver_id not in current_group_member_ids:
-		return False, "Group is full. A group can have at most 4 people."
+	conflicting_ids = [receiver_id for receiver_id in receiver_ids if receiver_id in current_group_member_ids]
+	if conflicting_ids:
+		return False, "One or more selected students are already in your active group or pending requests."
 
-	if receiver_id in current_group_member_ids:
-		return False, "This student is already in your group or pending group requests."
+	group_request_id = _next_group_request_id(connection)
 
-	existing = connection.execute(
-		"""
-		SELECT id
-		FROM roommate_requests
-		WHERE sender_id = ? AND receiver_id = ? AND status = 'pending'
-		""",
-		(sender_id, receiver_id),
-	).fetchone()
-
-	if existing is not None:
-		return False, "A pending request already exists for this student."
-
-	connection.execute(
-		"""
-		INSERT INTO roommate_requests (sender_id, receiver_id, status)
-		VALUES (?, ?, 'pending')
-		""",
-		(sender_id, receiver_id),
-	)
+	for receiver_id in receiver_ids:
+		connection.execute(
+			"""
+			INSERT INTO roommate_requests (group_request_id, sender_id, receiver_id, status)
+			VALUES (?, ?, ?, 'pending')
+			""",
+			(group_request_id, sender_id, receiver_id),
+		)
 	connection.commit()
 	return True, "Roommate request sent."
 
@@ -124,33 +157,22 @@ def get_incoming_roommate_requests(
 ) -> list[dict[str, Any]]:
 	ensure_roommate_requests_table(connection)
 
-	rows = connection.execute(
+	group_id_rows = connection.execute(
 		"""
-		SELECT rr.id, rr.sender_id, rr.receiver_id, rr.status
+		SELECT DISTINCT rr.group_request_id, rr.sender_id
 		FROM roommate_requests AS rr
 		WHERE rr.receiver_id = ? AND rr.status IN ('pending', 'accepted', 'rejected')
-		ORDER BY rr.created_at DESC, rr.id DESC
+		ORDER BY rr.group_request_id DESC
 		""",
 		(receiver_id,),
 	).fetchall()
 
 	requests: list[dict[str, Any]] = []
-	for request_id, sender_id, request_receiver_id, status in rows:
-		request_model = roommateRequest(sender_id, request_receiver_id)
-		if status == "accepted":
-			request_model.accept_request()
-		elif status == "rejected":
-			request_model.reject_request()
-
-		requests.append(
-			{
-				"request_id": int(request_id),
-				"sender_id": int(sender_id),
-				"receiver_id": int(request_receiver_id),
-				"status": str(status),
-				"request": request_model,
-			}
-		)
+	for group_request_id, sender_id in group_id_rows:
+		group_rows = _load_request_group_rows(connection, int(group_request_id))
+		if not group_rows:
+			continue
+		requests.append(_request_batch_dict(group_rows))
 
 	return requests
 
@@ -161,28 +183,22 @@ def get_outgoing_roommate_requests(
 ) -> list[dict[str, Any]]:
 	ensure_roommate_requests_table(connection)
 
-	rows = connection.execute(
+	group_id_rows = connection.execute(
 		"""
-		SELECT rr.id, rr.sender_id, rr.receiver_id, rr.status
+		SELECT DISTINCT rr.group_request_id
 		FROM roommate_requests AS rr
-		WHERE rr.sender_id = ? AND rr.status = 'pending'
-		ORDER BY rr.created_at DESC, rr.id DESC
+		WHERE rr.sender_id = ? AND rr.status IN ('pending', 'accepted')
+		ORDER BY rr.group_request_id DESC
 		""",
 		(sender_id,),
 	).fetchall()
 
 	requests: list[dict[str, Any]] = []
-	for request_id, request_sender_id, receiver_id, status in rows:
-		request_model = roommateRequest(request_sender_id, receiver_id)
-		requests.append(
-			{
-				"request_id": int(request_id),
-				"sender_id": int(request_sender_id),
-				"receiver_id": int(receiver_id),
-				"status": str(status),
-				"request": request_model,
-			}
-		)
+	for group_request_id, in group_id_rows:
+		group_rows = _load_request_group_rows(connection, int(group_request_id))
+		if not group_rows:
+			continue
+		requests.append(_request_batch_dict(group_rows))
 
 	return requests
 
@@ -191,17 +207,30 @@ def respond_to_roommate_request(
 	connection: sqlite3.Connection,
 	request_id: int,
 	accept: bool,
+	responder_id: int | None = None,
 ) -> bool:
 	ensure_roommate_requests_table(connection)
-	status = "accepted" if accept else "rejected"
-	result = connection.execute(
-		"""
-		UPDATE roommate_requests
-		SET status = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-		""",
-		(status, request_id),
-	)
+	if responder_id is None:
+		return False
+
+	if accept:
+		result = connection.execute(
+			"""
+			UPDATE roommate_requests
+			SET status = 'accepted', updated_at = CURRENT_TIMESTAMP
+			WHERE group_request_id = ? AND receiver_id = ? AND status = 'pending'
+			""",
+			(request_id, responder_id),
+		)
+	else:
+		result = connection.execute(
+			"""
+			UPDATE roommate_requests
+			SET status = 'rejected', updated_at = CURRENT_TIMESTAMP
+			WHERE group_request_id = ? AND status IN ('pending', 'accepted')
+			""",
+			(request_id,),
+		)
 	connection.commit()
 	return result.rowcount > 0
 
@@ -212,40 +241,38 @@ def get_group_status_for_student(
 ) -> list[dict[str, str]]:
 	ensure_roommate_requests_table(connection)
 
-	rows = connection.execute(
+	group_id_rows = connection.execute(
 		"""
-		SELECT rr.sender_id, rr.receiver_id, rr.status
+		SELECT DISTINCT rr.group_request_id
 		FROM roommate_requests AS rr
 		WHERE (rr.sender_id = ? OR rr.receiver_id = ?) AND rr.status IN ('pending', 'accepted')
-		ORDER BY rr.created_at DESC, rr.id DESC
+		ORDER BY rr.group_request_id DESC
 		""",
 		(student_id, student_id),
 	).fetchall()
 
 	members: dict[str, dict[str, str]] = {}
-	for sender_id, receiver_id, status in rows:
-		sender_key = str(sender_id)
-		receiver_key = str(receiver_id)
+	for group_request_id, in group_id_rows:
+		group_rows = _load_request_group_rows(connection, int(group_request_id))
+		if not group_rows:
+			continue
+		for _, _, sender_id, receiver_id, status in group_rows:
+			sender_key = str(sender_id)
+			receiver_key = str(receiver_id)
 
-		if sender_key not in members:
-			members[sender_key] = {
-				"id": sender_key,
-				"status": "Accepted",
-			}
+			if sender_key not in members:
+				members[sender_key] = {"id": sender_key, "status": "Accepted"}
 
-		receiver_status = "Pending"
-		if status == "accepted":
-			receiver_status = "Accepted"
-		elif status == "rejected":
-			receiver_status = "Rejected"
+			receiver_status = "Pending"
+			if status == "accepted":
+				receiver_status = "Accepted"
+			elif status == "rejected":
+				receiver_status = "Rejected"
 
-		if receiver_key not in members:
-			members[receiver_key] = {
-				"id": receiver_key,
-				"status": receiver_status,
-			}
-		elif members[receiver_key]["status"] != "Accepted":
-			members[receiver_key]["status"] = receiver_status
+			if receiver_key not in members:
+				members[receiver_key] = {"id": receiver_key, "status": receiver_status}
+			elif members[receiver_key]["status"] != "Accepted":
+				members[receiver_key]["status"] = receiver_status
 
 	return list(members.values())
 
@@ -256,7 +283,7 @@ def revoke_outgoing_roommate_requests(connection: sqlite3.Connection, sender_id:
 		"""
 		UPDATE roommate_requests
 		SET status = 'revoked', updated_at = CURRENT_TIMESTAMP
-		WHERE sender_id = ? AND status = 'pending'
+		WHERE sender_id = ? AND status IN ('pending', 'accepted')
 		""",
 		(sender_id,),
 	)
@@ -274,7 +301,7 @@ def revoke_specific_outgoing_roommate_request(
 		"""
 		UPDATE roommate_requests
 		SET status = 'revoked', updated_at = CURRENT_TIMESTAMP
-		WHERE id = ? AND sender_id = ? AND status = 'pending'
+		WHERE group_request_id = ? AND sender_id = ? AND status IN ('pending', 'accepted')
 		""",
 		(request_id, sender_id),
 	)
@@ -287,7 +314,7 @@ def back_out_of_roommate_group(connection: sqlite3.Connection, student_id: int) 
 
 	accepted_links = connection.execute(
 		"""
-		SELECT id, sender_id, receiver_id
+		SELECT group_request_id, sender_id, receiver_id
 		FROM roommate_requests
 		WHERE status = 'accepted' AND (sender_id = ? OR receiver_id = ?)
 		""",
@@ -317,6 +344,74 @@ def back_out_of_roommate_group(connection: sqlite3.Connection, student_id: int) 
 
 	connection.commit()
 	return int(result.rowcount)
+
+
+def _next_group_request_id(connection: sqlite3.Connection) -> int:
+	row = connection.execute("SELECT COALESCE(MAX(group_request_id), 0) + 1 FROM roommate_requests").fetchone()
+	return int(row[0]) if row is not None else 1
+
+
+def _load_request_group_rows(
+	connection: sqlite3.Connection,
+	group_request_id: int,
+) -> list[tuple[int, int, int, int, str]]:
+	rows = connection.execute(
+		"""
+		SELECT group_request_id, id, sender_id, receiver_id, status
+		FROM roommate_requests
+		WHERE group_request_id = ?
+		ORDER BY created_at DESC, id DESC
+		""",
+		(group_request_id,),
+	).fetchall()
+	return [
+		(int(row[0]), int(row[1]), int(row[2]), int(row[3]), str(row[4]))
+		for row in rows
+	]
+
+
+def _request_batch_status(group_rows: list[tuple[int, int, int, int, str]]) -> str:
+	statuses = [str(row[4]) for row in group_rows]
+	if any(status == "rejected" for status in statuses):
+		return "rejected"
+	if all(status == "accepted" for status in statuses):
+		return "accepted"
+	if any(status == "pending" for status in statuses):
+		return "pending"
+	return statuses[0] if statuses else "pending"
+
+
+def _group_roommate_request_rows(
+	rows: list[tuple[int, int, int, int, str]]
+) -> dict[int, list[tuple[int, int, int, int, str]]]:
+	grouped_rows: dict[int, list[tuple[int, int, int, int, str]]] = {}
+	for row in rows:
+		group_request_id = int(row[0])
+		grouped_rows.setdefault(group_request_id, []).append(row)
+	return grouped_rows
+
+
+def _request_for_group_rows(group_rows: list[tuple[int, int, int, int, str]]) -> roommateRequest:
+	sender_id = int(group_rows[0][1])
+	receiver_ids = [int(row[3]) for row in group_rows]
+	request = roommateRequest(sender_id, receiver_ids[0], *receiver_ids[1:3])
+	for _, _, receiver_id, _, status in group_rows:
+		if status == "accepted":
+			request.accept_request(int(receiver_id))
+		elif status == "rejected":
+			request.reject_request(int(receiver_id))
+	request.updateStatus()
+	return request
+
+
+def _request_batch_dict(group_rows: list[tuple[int, int, int, int, str]]) -> dict[str, Any]:
+	return {
+		"request_id": int(group_rows[0][0]),
+		"sender_id": int(group_rows[0][1]),
+		"receiver_ids": [int(row[3]) for row in group_rows],
+		"status": _request_batch_status(group_rows),
+		"request": _request_for_group_rows(group_rows),
+	}
 
 
 def _ensure_accepted_link_between(connection: sqlite3.Connection, student_a: int, student_b: int) -> None:

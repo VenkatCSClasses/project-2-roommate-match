@@ -29,6 +29,7 @@ class LoginApp(App):
 	current_student = None
 	db_connection_error: bool = False
 	student_rows: list[tuple[str, str, str]] = []
+	selected_student_ids: list[int] = []
 	selected_student_id: str | None = None
 	request_rows: list[dict[str, object]] = []
 	selected_request_id: int | None = None
@@ -179,9 +180,7 @@ class LoginApp(App):
 			self._handle_interest_row_selection(event.cursor_row)
 
 	def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
-		if event.data_table.id == "students-table":
-			self._handle_student_row_selection(event.coordinate.row)
-		elif event.data_table.id == "requests-table":
+		if event.data_table.id == "requests-table":
 			self._handle_request_row_selection(event.coordinate.row)
 
 	def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
@@ -189,9 +188,7 @@ class LoginApp(App):
 		if row_index < 0:
 			return
 
-		if event.data_table.id == "students-table":
-			self._handle_student_row_selection(row_index)
-		elif event.data_table.id == "requests-table":
+		if event.data_table.id == "requests-table":
 			self._handle_request_row_selection(row_index)
 		elif event.data_table.id == "interests-table":
 			self._preview_interest_row(row_index)
@@ -201,9 +198,7 @@ class LoginApp(App):
 		if row_index < 0:
 			return
 
-		if event.data_table.id == "students-table":
-			self._handle_student_row_selection(row_index)
-		elif event.data_table.id == "requests-table":
+		if event.data_table.id == "requests-table":
 			self._handle_request_row_selection(row_index)
 		elif event.data_table.id == "interests-table":
 			self._preview_interest_row(row_index)
@@ -277,14 +272,11 @@ class LoginApp(App):
 
 		students = self._fetch_students_with_interests()
 		self.student_rows = students
+		self.selected_student_ids = []
 		self.selected_student_id = None
 		self.selected_request_id = None
 		self.request_table_mode = None
-		table.clear(columns=True)
-		table.add_columns("Student ID", "Student Name", "Interests")
-
-		for student_id, student_name, interests in students:
-			table.add_row(str(student_id), student_name, interests)
+		self._render_students_table()
 
 		if not students:
 			status.update("No students found in the database.")
@@ -356,12 +348,14 @@ class LoginApp(App):
 		self.request_table_mode = "incoming"
 
 		requests_table.clear(columns=True)
-		requests_table.add_columns("Request ID", "From", "Status")
+		requests_table.add_columns("Request ID", "From", "Group Members", "Status")
 		for request_row in self.request_rows:
 			sender_name = self._student_name_from_id(int(request_row["sender_id"]))
+			member_names = ", ".join(self._student_name_from_id(member_id) for member_id in request_row["receiver_ids"])
 			requests_table.add_row(
 				str(request_row["request_id"]),
 				sender_name,
+				member_names,
 				str(request_row["status"]).capitalize(),
 			)
 
@@ -402,12 +396,14 @@ class LoginApp(App):
 		self.request_table_mode = "outgoing"
 
 		requests_table.clear(columns=True)
-		requests_table.add_columns("Request ID", "To", "Status")
+		requests_table.add_columns("Request ID", "To", "Group Members", "Status")
 		for request_row in self.request_rows:
-			receiver_name = self._student_name_from_id(int(request_row["receiver_id"]))
+			receiver_name = self._student_name_from_id(int(request_row["receiver_ids"][0])) if request_row["receiver_ids"] else "Student"
+			member_names = ", ".join(self._student_name_from_id(member_id) for member_id in request_row["receiver_ids"])
 			requests_table.add_row(
 				str(request_row["request_id"]),
 				receiver_name,
+				member_names,
 				str(request_row["status"]).capitalize(),
 			)
 
@@ -484,6 +480,16 @@ class LoginApp(App):
 			lines.append(f"- {member_name}: {member['status']}")
 		return "\n".join(lines)
 
+	def _render_students_table(self) -> None:
+		table = self.query_one("#students-table", DataTable)
+		table.clear(columns=True)
+		table.add_columns("Selected", "Student ID", "Student Name", "Interests")
+
+		selected_ids = set(self.selected_student_ids)
+		for student_id, student_name, interests in self.student_rows:
+			selected_text = "Yes" if int(student_id) in selected_ids else "No"
+			table.add_row(selected_text, str(student_id), student_name, interests)
+
 	def _add_or_update_group_member(self, student_id: str, student_name: str, status: str) -> None:
 		for member in self.group_members:
 			if member["id"] == student_id:
@@ -493,17 +499,11 @@ class LoginApp(App):
 		self.group_members.append({"id": student_id, "name": student_name, "status": status})
 
 	def _selected_student_name(self) -> str | None:
-		if self.system is None or self.selected_student_id is None:
-			return None
+		names = self._selected_student_names()
+		return names[0] if names else None
 
-		student = self.system.getStudentById(int(self.selected_student_id))
-		if student is not None:
-			return student.name
-
-		for student_id, student_name, _ in self.student_rows:
-			if student_id == self.selected_student_id:
-				return student_name
-		return None
+	def _selected_student_names(self) -> list[str]:
+		return [self._student_name_from_id(student_id) for student_id in self.selected_student_ids]
 
 	def _student_name_from_id(self, student_id: int) -> str:
 		if self.system is not None:
@@ -554,6 +554,7 @@ class LoginApp(App):
 		revoke_button.add_class("hidden")
 		group_details.add_class("hidden")
 		self.selected_student_id = None
+		self.selected_student_ids = []
 		self.selected_request_id = None
 		self.selected_interest_title = None
 		self.request_table_mode = None
@@ -568,37 +569,50 @@ class LoginApp(App):
 			return
 
 		student_id, student_name, _ = self.student_rows[row_index]
-		self.selected_student_id = student_id
-		send_button.remove_class("hidden")
-		status.update(f"Selected {student_name}. Option: Send roommate request.")
+		student_id_int = int(student_id)
+
+		if student_id_int in self.selected_student_ids:
+			self.selected_student_ids.remove(student_id_int)
+			status.update(f"Removed {student_name} from the request group.")
+		else:
+			if len(self.selected_student_ids) >= 3:
+				status.update("You can select up to 3 other students.")
+				return
+			self.selected_student_ids.append(student_id_int)
+			status.update(f"Added {student_name} to the request group.")
+
+		self.selected_student_ids.sort()
+		if self.selected_student_ids:
+			send_button.remove_class("hidden")
+		else:
+			send_button.add_class("hidden")
+		self._render_students_table()
 
 	def _send_roommate_request(self) -> None:
 		status = self.query_one("#menu-status", Label)
 
-		if self.selected_student_id is None:
-			status.update("Select a student first.")
+		if not self.selected_student_ids:
+			status.update("Select at least one student first.")
 			return
 
 		if self.current_student is None:
 			status.update("No logged-in student found.")
 			return
 
-		selected_name = self._selected_student_name()
-		if selected_name is None:
-			status.update("Could not read selected student.")
-			return
-
 		if self.db_connection is None:
 			status.update("Unable to connect to app.db.")
 			return
 
-		new_request = roommateRequest(int(self.current_student.id), int(self.selected_student_id))
+		selected_names = self._selected_student_names()
+		new_request = roommateRequest(int(self.current_student.id), *self.selected_student_ids)
 		success, message = create_roommate_request(self.db_connection, new_request)
 		if not success:
 			status.update(message)
 			return
 
-		self._show_group_status_menu(f"{message} Sent to {selected_name}.")
+		self.selected_student_ids = []
+		self._render_students_table()
+		self._show_group_status_menu(f"{message} Sent to {', '.join(selected_names)}.")
 
 	def _handle_request_row_selection(self, row_index: int) -> None:
 		status = self.query_one("#menu-status", Label)
@@ -686,7 +700,12 @@ class LoginApp(App):
 			status.update("Unable to connect to app.db.")
 			return
 
-		updated = respond_to_roommate_request(self.db_connection, self.selected_request_id, accept)
+		updated = respond_to_roommate_request(
+			self.db_connection,
+			self.selected_request_id,
+			accept,
+			int(self.current_student.id) if self.current_student is not None else None,
+		)
 		if not updated:
 			status.update("Could not update request status.")
 			return
@@ -759,6 +778,7 @@ class LoginApp(App):
 		self.current_student = None
 		self.group_members = []
 		self.student_rows = []
+		self.selected_student_ids = []
 		self.request_rows = []
 
 		welcome.update("")
