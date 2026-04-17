@@ -9,6 +9,9 @@ from .roommateRequest import roommateRequest
 from .system import RoommateSystem
 
 
+_PENDING_ROOMMATE_REQUESTS: dict[int, list[roommateRequest]] = {}
+
+
 def get_default_database_path() -> Path:
 	return Path(__file__).resolve().parents[2] / "app.db"
 
@@ -92,6 +95,8 @@ def create_roommate_request(connection: sqlite3.Connection, request: roommateReq
 	if group_size > 4:
 		return False, "A group can have at most 4 people."
 
+	queued_requests = _pending_requests_for_connection(connection)
+
 	active_batch_row = connection.execute(
 		"""
 		SELECT COUNT(DISTINCT group_request_id)
@@ -101,38 +106,55 @@ def create_roommate_request(connection: sqlite3.Connection, request: roommateReq
 		(sender_id,),
 	).fetchone()
 	active_batches = int(active_batch_row[0]) if active_batch_row is not None else 0
-	if active_batches >= 1:
+	active_queued_batches = sum(1 for queued_request in queued_requests if int(queued_request.getSenderId()) == sender_id)
+	if active_batches + active_queued_batches >= 1:
 		return False, "You already have an active roommate request group."
 
-	outgoing_count_row = connection.execute(
-		"""
-		SELECT COUNT(*)
-		FROM roommate_requests
-		WHERE sender_id = ? AND status IN ('pending', 'accepted')
-		""",
-		(sender_id,),
-	).fetchone()
-	outgoing_count = int(outgoing_count_row[0]) if outgoing_count_row is not None else 0
-	if outgoing_count + len(receiver_ids) > 10:
-		return False, "You cannot send more than 10 outgoing roommate requests."
-
 	current_group_member_ids = _get_sender_group_member_ids(connection, sender_id)
+	for queued_request in queued_requests:
+		if int(queued_request.getSenderId()) == sender_id:
+			current_group_member_ids.update(int(receiver_id) for receiver_id in queued_request.getReceiverIds())
 	conflicting_ids = [receiver_id for receiver_id in receiver_ids if receiver_id in current_group_member_ids]
 	if conflicting_ids:
 		return False, "One or more selected students are already in your active group or pending requests."
 
-	group_request_id = _next_group_request_id(connection)
+	queued_requests.append(roommateRequest(sender_id, receiver_ids[0], *receiver_ids[1:3]))
+	return True, "Roommate request queued. Save and Exit to persist."
 
-	for receiver_id in receiver_ids:
-		connection.execute(
-			"""
-			INSERT INTO roommate_requests (group_request_id, sender_id, receiver_id, status)
-			VALUES (?, ?, ?, 'pending')
-			""",
-			(group_request_id, sender_id, receiver_id),
-		)
+
+def persist_pending_roommate_requests(connection: sqlite3.Connection) -> int:
+	ensure_roommate_requests_table(connection)
+	queued_requests = _pending_requests_for_connection(connection)
+	if not queued_requests:
+		return 0
+
+	queued_count = len(queued_requests)
+	for queued_request in queued_requests:
+		sender_id = int(queued_request.getSenderId())
+		receiver_ids = [int(receiver_id) for receiver_id in queued_request.getReceiverIds()]
+		if not receiver_ids:
+			continue
+
+		group_request_id = _next_group_request_id(connection)
+		for receiver_id in receiver_ids:
+			connection.execute(
+				"""
+				INSERT INTO roommate_requests (group_request_id, sender_id, receiver_id, status)
+				VALUES (?, ?, ?, 'pending')
+				""",
+				(group_request_id, sender_id, receiver_id),
+			)
+
 	connection.commit()
-	return True, "Roommate request sent."
+	queued_requests.clear()
+	return queued_count
+
+
+def _pending_requests_for_connection(connection: sqlite3.Connection) -> list[roommateRequest]:
+	connection_key = id(connection)
+	if connection_key not in _PENDING_ROOMMATE_REQUESTS:
+		_PENDING_ROOMMATE_REQUESTS[connection_key] = []
+	return _PENDING_ROOMMATE_REQUESTS[connection_key]
 
 
 def _get_sender_group_member_ids(connection: sqlite3.Connection, sender_id: int) -> set[int]:
@@ -391,10 +413,10 @@ def _group_roommate_request_rows(
 
 
 def _request_for_group_rows(group_rows: list[tuple[int, int, int, int, str]]) -> roommateRequest:
-	sender_id = int(group_rows[0][1])
+	sender_id = int(group_rows[0][2])
 	receiver_ids = [int(row[3]) for row in group_rows]
 	request = roommateRequest(sender_id, receiver_ids[0], *receiver_ids[1:3])
-	for _, _, receiver_id, _, status in group_rows:
+	for _, _, _, receiver_id, status in group_rows:
 		if status == "accepted":
 			request.accept_request(int(receiver_id))
 		elif status == "rejected":
@@ -406,7 +428,7 @@ def _request_for_group_rows(group_rows: list[tuple[int, int, int, int, str]]) ->
 def _request_batch_dict(group_rows: list[tuple[int, int, int, int, str]]) -> dict[str, Any]:
 	return {
 		"request_id": int(group_rows[0][0]),
-		"sender_id": int(group_rows[0][1]),
+		"sender_id": int(group_rows[0][2]),
 		"receiver_ids": [int(row[3]) for row in group_rows],
 		"status": _request_batch_status(group_rows),
 		"request": _request_for_group_rows(group_rows),
@@ -471,7 +493,7 @@ def add_interest_to_student(
 	student_id: int,
 	interest_title: str,
 ) -> tuple[bool, str]:
-	join_table = _get_or_create_interest_join_table(connection)
+	join_table = _get_interest_join_table(connection)
 	interest_id = _find_interest_id(connection, interest_title)
 	if interest_id is None:
 		return False, "That interest does not exist."
@@ -506,7 +528,7 @@ def remove_interest_from_student(
 	student_id: int,
 	interest_title: str,
 ) -> tuple[bool, str]:
-	join_table = _get_or_create_interest_join_table(connection)
+	join_table = _get_interest_join_table(connection)
 	interest_id = _find_interest_id(connection, interest_title)
 	if interest_id is None:
 		return False, "That interest does not exist."
@@ -522,22 +544,11 @@ def remove_interest_from_student(
 	return True, "Interest removed."
 
 
-def _get_or_create_interest_join_table(connection: sqlite3.Connection) -> str:
+def _get_interest_join_table(connection: sqlite3.Connection) -> str:
 	join_table = _choose_interest_join_table(connection)
-	if join_table is not None:
-		return join_table
-
-	connection.execute(
-		"""
-		CREATE TABLE IF NOT EXISTS students_to_interest (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			student_id INT,
-			interest_id INT
-		)
-		"""
-	)
-	connection.commit()
-	return "students_to_interest"
+	if join_table is None:
+		raise ValueError("Interests join table not found. Expected students_to_interests or students_to_interest.")
+	return join_table
 
 
 def _find_interest_id(connection: sqlite3.Connection, interest_title: str) -> int | None:

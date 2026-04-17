@@ -11,6 +11,7 @@ from .databaseHelper import (
 	get_interest_options,
 	get_group_status_for_student,
 	get_incoming_roommate_requests,
+	persist_pending_roommate_requests,
 	remove_interest_from_student,
 	respond_to_roommate_request,
 )
@@ -139,6 +140,7 @@ class LoginApp(App):
 
 	def on_unmount(self) -> None:
 		if self.db_connection is not None:
+			persist_pending_roommate_requests(self.db_connection)
 			self.db_connection.close()
 
 	def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -312,7 +314,7 @@ class LoginApp(App):
 
 		if not self.group_members:
 			group_details.update("No group yet. Select a student in View Other Students and send a roommate request.")
-			status.update("No group created yet.")
+			status.update(info_message or "No group created yet.")
 		else:
 			group_details.update(self._format_group_status())
 			status.update(info_message or "Group status loaded.")
@@ -692,7 +694,7 @@ class LoginApp(App):
 
 	def _save_and_exit(self) -> None:
 		if self.db_connection is not None:
-			self.db_connection.commit()
+			persist_pending_roommate_requests(self.db_connection)
 		self.exit()
 
 
