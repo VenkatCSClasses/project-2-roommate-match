@@ -13,19 +13,29 @@ class TestRoommateSystem(unittest.TestCase):
     def test_remove_student(self):
         self.system.addStudent("Julia", "j@test.com", "123", "NY")
         student = self.system.getStudentByName("Julia")
-        self.system.removeStudent(student.id)
+        studentID = student[0].id
+        self.system.removeStudent(student[0].id)
         self.assertEqual(len(self.system.students), 0)
+        self.assertEqual(self.system.removeStudent(705000000), "There is no student with id: 705000000")
+        self.assertEqual(self.system.removeStudent(studentID), "There is no student with id: " + str(studentID))
+        
 
     def test_get_student_by_name(self):
         self.system.addStudent("Julia", "j@test.com", "123", "NY")
+        self.system.addStudent("Julia", "julia@test.com", "123", "CA")
+        self.system.addStudent("Bob", "Bob@test.com", "123", "CA")
         student = self.system.getStudentByName("Julia")
+        student = self.system.getStudentByName("Bob")
         self.assertEqual(len(student), 1)
+        student = self.system.getStudentByName("Julia D")
+        self.assertEqual(len(student), 0)
 
     def test_get_student_by_id(self):
         self.system.addStudent("Julia", "j@test.com", "123", "NY")
         student1 = self.system.students[0]
         foundById1 = self.system.getStudentById(student1.id)
         self.assertEqual(foundById1, student1)
+        self.assertEqual(self.system.getStudentById(705000000), None)
 
     def test_finalize_pairing(self):
         self.system.addStudent("April", "a@test.com", "123", "NY")
