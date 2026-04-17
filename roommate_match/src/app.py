@@ -11,9 +11,6 @@ from .databaseHelper import (
 	get_interest_options,
 	get_group_status_for_student,
 	get_incoming_roommate_requests,
-	get_outgoing_roommate_requests,
-	revoke_outgoing_roommate_requests,
-	revoke_specific_outgoing_roommate_request,
 	remove_interest_from_student,
 	respond_to_roommate_request,
 )
@@ -124,7 +121,6 @@ class LoginApp(App):
 			yield Button("Send Roommate Request", id="send-request-button", variant="primary", classes="hidden")
 			yield Button("Accept Request", id="accept-request-button", variant="primary", classes="hidden")
 			yield Button("Reject Request", id="reject-request-button", variant="error", classes="hidden")
-			yield Button("Revoke Pending Requests", id="revoke-request-button", variant="warning", classes="hidden")
 			yield Label("", id="group-details", classes="hidden")
 		yield Footer()
 
@@ -168,8 +164,6 @@ class LoginApp(App):
 			self._respond_to_selected_request(True)
 		elif event.button.id == "reject-request-button":
 			self._respond_to_selected_request(False)
-		elif event.button.id == "revoke-request-button":
-			self._revoke_pending_requests()
 
 	def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
 		if event.data_table.id == "students-table":
@@ -289,7 +283,6 @@ class LoginApp(App):
 		group_details.add_class("hidden")
 		self.query_one("#accept-request-button", Button).add_class("hidden")
 		self.query_one("#reject-request-button", Button).add_class("hidden")
-		self.query_one("#revoke-request-button", Button).add_class("hidden")
 		self.query_one("#send-request-button", Button).add_class("hidden")
 		table.remove_class("hidden")
 		table.focus()
@@ -302,7 +295,6 @@ class LoginApp(App):
 		send_button = self.query_one("#send-request-button", Button)
 		accept_button = self.query_one("#accept-request-button", Button)
 		reject_button = self.query_one("#reject-request-button", Button)
-		revoke_button = self.query_one("#revoke-request-button", Button)
 		group_details = self.query_one("#group-details", Label)
 
 		table.add_class("hidden")
@@ -311,7 +303,6 @@ class LoginApp(App):
 		send_button.add_class("hidden")
 		accept_button.add_class("hidden")
 		reject_button.add_class("hidden")
-		revoke_button.remove_class("hidden")
 		self.request_table_mode = None
 		self.selected_request_id = None
 		self._set_students_view_mode(True)
@@ -336,7 +327,6 @@ class LoginApp(App):
 		send_button = self.query_one("#send-request-button", Button)
 		accept_button = self.query_one("#accept-request-button", Button)
 		reject_button = self.query_one("#reject-request-button", Button)
-		revoke_button = self.query_one("#revoke-request-button", Button)
 		group_details = self.query_one("#group-details", Label)
 
 		if self.current_student is None or self.db_connection is None:
@@ -365,61 +355,12 @@ class LoginApp(App):
 		send_button.add_class("hidden")
 		accept_button.add_class("hidden")
 		reject_button.add_class("hidden")
-		revoke_button.add_class("hidden")
 		self._set_students_view_mode(True)
 
 		if not self.request_rows:
 			status.update("No roommate requests found.")
 		else:
 			status.update("Select a request to show response actions.")
-
-		requests_table.remove_class("hidden")
-		requests_table.focus()
-
-	def _show_outgoing_requests_for_revoke(self) -> None:
-		status = self.query_one("#menu-status", Label)
-		students_table = self.query_one("#students-table", DataTable)
-		requests_table = self.query_one("#requests-table", DataTable)
-		interests_table = self.query_one("#interests-table", DataTable)
-		send_button = self.query_one("#send-request-button", Button)
-		accept_button = self.query_one("#accept-request-button", Button)
-		reject_button = self.query_one("#reject-request-button", Button)
-		revoke_button = self.query_one("#revoke-request-button", Button)
-		group_details = self.query_one("#group-details", Label)
-
-		if self.current_student is None or self.db_connection is None:
-			status.update("No logged-in student found.")
-			return
-
-		self.request_rows = get_outgoing_roommate_requests(self.db_connection, int(self.current_student.id))
-		self.selected_request_id = None
-		self.request_table_mode = "outgoing"
-
-		requests_table.clear(columns=True)
-		requests_table.add_columns("Request ID", "To", "Group Members", "Status")
-		for request_row in self.request_rows:
-			receiver_name = self._student_name_from_id(int(request_row["receiver_ids"][0])) if request_row["receiver_ids"] else "Student"
-			member_names = ", ".join(self._student_name_from_id(member_id) for member_id in request_row["receiver_ids"])
-			requests_table.add_row(
-				str(request_row["request_id"]),
-				receiver_name,
-				member_names,
-				str(request_row["status"]).capitalize(),
-			)
-
-		students_table.add_class("hidden")
-		interests_table.add_class("hidden")
-		group_details.add_class("hidden")
-		send_button.add_class("hidden")
-		accept_button.add_class("hidden")
-		reject_button.add_class("hidden")
-		revoke_button.remove_class("hidden")
-		self._set_students_view_mode(True)
-
-		if not self.request_rows:
-			status.update("No pending outgoing requests to revoke.")
-		else:
-			status.update("Select an outgoing request, then click Revoke Pending Requests.")
 
 		requests_table.remove_class("hidden")
 		requests_table.focus()
@@ -432,7 +373,6 @@ class LoginApp(App):
 		send_button = self.query_one("#send-request-button", Button)
 		accept_button = self.query_one("#accept-request-button", Button)
 		reject_button = self.query_one("#reject-request-button", Button)
-		revoke_button = self.query_one("#revoke-request-button", Button)
 		group_details = self.query_one("#group-details", Label)
 
 		if self.current_student is None or self.db_connection is None:
@@ -459,7 +399,6 @@ class LoginApp(App):
 		send_button.add_class("hidden")
 		accept_button.add_class("hidden")
 		reject_button.add_class("hidden")
-		revoke_button.add_class("hidden")
 		self._set_students_view_mode(True)
 
 		if not self.interest_rows:
@@ -542,7 +481,6 @@ class LoginApp(App):
 		send_button = self.query_one("#send-request-button", Button)
 		accept_button = self.query_one("#accept-request-button", Button)
 		reject_button = self.query_one("#reject-request-button", Button)
-		revoke_button = self.query_one("#revoke-request-button", Button)
 		group_details = self.query_one("#group-details", Label)
 
 		table.add_class("hidden")
@@ -551,7 +489,6 @@ class LoginApp(App):
 		send_button.add_class("hidden")
 		accept_button.add_class("hidden")
 		reject_button.add_class("hidden")
-		revoke_button.add_class("hidden")
 		group_details.add_class("hidden")
 		self.selected_student_id = None
 		self.selected_student_ids = []
@@ -618,20 +555,12 @@ class LoginApp(App):
 		status = self.query_one("#menu-status", Label)
 		accept_button = self.query_one("#accept-request-button", Button)
 		reject_button = self.query_one("#reject-request-button", Button)
-		revoke_button = self.query_one("#revoke-request-button", Button)
 
 		if row_index < 0 or row_index >= len(self.request_rows):
 			return
 
 		selected_row = self.request_rows[row_index]
 		self.selected_request_id = int(selected_row["request_id"])
-
-		if self.request_table_mode == "outgoing":
-			accept_button.add_class("hidden")
-			reject_button.add_class("hidden")
-			revoke_button.remove_class("hidden")
-			status.update(f"Selected outgoing request {self.selected_request_id}. Click Revoke Pending Requests.")
-			return
 
 		request_model = selected_row["request"]
 		if isinstance(request_model, roommateRequest):
@@ -713,34 +642,6 @@ class LoginApp(App):
 		result_text = "accepted" if accept else "rejected"
 		status.update(f"Request {self.selected_request_id} {result_text}.")
 		self._show_roommate_requests_menu()
-
-	def _revoke_pending_requests(self) -> None:
-		status = self.query_one("#menu-status", Label)
-
-		if self.current_student is None or self.db_connection is None:
-			status.update("No logged-in student found.")
-			return
-
-		if self.request_table_mode != "outgoing":
-			self._show_outgoing_requests_for_revoke()
-			return
-
-		if self.selected_request_id is None:
-			status.update("Select an outgoing request first.")
-			return
-
-		revoked = revoke_specific_outgoing_roommate_request(
-			self.db_connection,
-			int(self.current_student.id),
-			int(self.selected_request_id),
-		)
-		if not revoked:
-			status.update("Could not revoke that request. It may already be processed.")
-			self._show_outgoing_requests_for_revoke()
-			return
-
-		status.update(f"Revoked request {self.selected_request_id}.")
-		self._show_outgoing_requests_for_revoke()
 
 	def _get_available_interest_titles(self) -> list[str]:
 		if self.system is not None and self.system.interest_options:
