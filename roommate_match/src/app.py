@@ -8,9 +8,9 @@ from .databaseHelper import (
 	add_interest_to_student,
 	bootstrap_database_and_system,
 	create_roommate_request,
-	get_interest_options,
 	get_group_status_for_student,
 	get_incoming_roommate_requests,
+	persist_pending_interest_updates,
 	persist_pending_roommate_requests,
 	remove_interest_from_student,
 	respond_to_roommate_request,
@@ -140,6 +140,7 @@ class LoginApp(App):
 
 	def on_unmount(self) -> None:
 		if self.db_connection is not None:
+			persist_pending_interest_updates(self.db_connection)
 			persist_pending_roommate_requests(self.db_connection)
 			self.db_connection.close()
 
@@ -605,18 +606,16 @@ class LoginApp(App):
 		if is_in_profile:
 			success, message = remove_interest_from_student(
 				self.db_connection,
-				int(self.current_student.id),
+				self.current_student,
 				interest_title,
 			)
 		else:
 			success, message = add_interest_to_student(
 				self.db_connection,
-				int(self.current_student.id),
+				self.current_student,
 				interest_title,
 			)
 
-		if success:
-			self._update_current_student_interest_state(interest_title, not is_in_profile)
 		self.selected_interest_title = None
 		self._show_change_interests_menu(message)
 
@@ -646,16 +645,9 @@ class LoginApp(App):
 		self._show_roommate_requests_menu()
 
 	def _get_available_interest_titles(self) -> list[str]:
-		if self.system is not None and self.system.interest_options:
-			return list(self.system.interest_options)
-
-		if self.db_connection is None:
+		if self.system is None:
 			return []
-
-		options = [title for _, title in get_interest_options(self.db_connection)]
-		if self.system is not None:
-			self.system.interest_options = list(options)
-		return options
+		return list(self.system.interest_options)
 
 	def _update_current_student_interest_state(self, interest_title: str, should_have_interest: bool) -> None:
 		if self.current_student is None:
@@ -694,6 +686,7 @@ class LoginApp(App):
 
 	def _save_and_exit(self) -> None:
 		if self.db_connection is not None:
+			persist_pending_interest_updates(self.db_connection)
 			persist_pending_roommate_requests(self.db_connection)
 		self.exit()
 

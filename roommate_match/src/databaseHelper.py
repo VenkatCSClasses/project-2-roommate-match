@@ -10,6 +10,7 @@ from .system import RoommateSystem
 
 
 _PENDING_ROOMMATE_REQUESTS: dict[int, list[roommateRequest]] = {}
+_PENDING_INTEREST_UPDATES: dict[int, dict[int, set[str]]] = {}
 
 
 def get_default_database_path() -> Path:
@@ -137,12 +138,19 @@ def persist_pending_roommate_requests(connection: sqlite3.Connection) -> int:
 
 		group_request_id = _next_group_request_id(connection)
 		for receiver_id in receiver_ids:
+			response = queued_request.responses.get(receiver_id)
+			status = "pending"
+			if response is True:
+				status = "accepted"
+			elif response is False:
+				status = "rejected"
+
 			connection.execute(
 				"""
 				INSERT INTO roommate_requests (group_request_id, sender_id, receiver_id, status)
-				VALUES (?, ?, ?, 'pending')
+				VALUES (?, ?, ?, ?)
 				""",
-				(group_request_id, sender_id, receiver_id),
+				(group_request_id, sender_id, receiver_id, status),
 			)
 
 	connection.commit()
@@ -155,6 +163,55 @@ def _pending_requests_for_connection(connection: sqlite3.Connection) -> list[roo
 	if connection_key not in _PENDING_ROOMMATE_REQUESTS:
 		_PENDING_ROOMMATE_REQUESTS[connection_key] = []
 	return _PENDING_ROOMMATE_REQUESTS[connection_key]
+
+
+def persist_pending_interest_updates(connection: sqlite3.Connection) -> int:
+	pending_interest_updates = _pending_interest_updates_for_connection(connection)
+	if not pending_interest_updates:
+		return 0
+
+	join_table = _get_interest_join_table(connection)
+	columns = _table_columns(connection, join_table)
+	written_students = 0
+
+	for student_id, interest_titles in pending_interest_updates.items():
+		connection.execute(f"DELETE FROM {join_table} WHERE student_id = ?", (int(student_id),))
+
+		interest_ids: list[int] = []
+		for interest_title in sorted(interest_titles):
+			interest_id = _find_interest_id(connection, interest_title)
+			if interest_id is not None:
+				interest_ids.append(int(interest_id))
+
+		if interest_ids:
+			if "id" in columns:
+				next_id_row = connection.execute(f"SELECT COALESCE(MAX(id), 0) + 1 FROM {join_table}").fetchone()
+				next_id = int(next_id_row[0]) if next_id_row is not None else 1
+				for interest_id in interest_ids:
+					connection.execute(
+						f"INSERT INTO {join_table} (id, student_id, interest_id) VALUES (?, ?, ?)",
+						(next_id, int(student_id), interest_id),
+					)
+					next_id += 1
+			else:
+				for interest_id in interest_ids:
+					connection.execute(
+						f"INSERT INTO {join_table} (student_id, interest_id) VALUES (?, ?)",
+						(int(student_id), interest_id),
+					)
+
+		written_students += 1
+
+	connection.commit()
+	pending_interest_updates.clear()
+	return written_students
+
+
+def _pending_interest_updates_for_connection(connection: sqlite3.Connection) -> dict[int, set[str]]:
+	connection_key = id(connection)
+	if connection_key not in _PENDING_INTEREST_UPDATES:
+		_PENDING_INTEREST_UPDATES[connection_key] = {}
+	return _PENDING_INTEREST_UPDATES[connection_key]
 
 
 def _get_sender_group_member_ids(connection: sqlite3.Connection, sender_id: int) -> set[int]:
@@ -402,16 +459,6 @@ def _request_batch_status(group_rows: list[tuple[int, int, int, int, str]]) -> s
 	return statuses[0] if statuses else "pending"
 
 
-def _group_roommate_request_rows(
-	rows: list[tuple[int, int, int, int, str]]
-) -> dict[int, list[tuple[int, int, int, int, str]]]:
-	grouped_rows: dict[int, list[tuple[int, int, int, int, str]]] = {}
-	for row in rows:
-		group_request_id = int(row[0])
-		grouped_rows.setdefault(group_request_id, []).append(row)
-	return grouped_rows
-
-
 def _request_for_group_rows(group_rows: list[tuple[int, int, int, int, str]]) -> roommateRequest:
 	sender_id = int(group_rows[0][2])
 	receiver_ids = [int(row[3]) for row in group_rows]
@@ -436,37 +483,17 @@ def _request_batch_dict(group_rows: list[tuple[int, int, int, int, str]]) -> dic
 
 
 def _ensure_accepted_link_between(connection: sqlite3.Connection, student_a: int, student_b: int) -> None:
-	existing = connection.execute(
-		"""
-		SELECT id, status
-		FROM roommate_requests
-		WHERE
-			((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?))
-			AND status IN ('pending', 'accepted')
-		LIMIT 1
-		""",
-		(student_a, student_b, student_b, student_a),
-	).fetchone()
+	queued_requests = _pending_requests_for_connection(connection)
+	for queued_request in queued_requests:
+		sender_id = int(queued_request.getSenderId())
+		receiver_ids = {int(receiver_id) for receiver_id in queued_request.getReceiverIds()}
+		if (sender_id == student_a and student_b in receiver_ids) or (sender_id == student_b and student_a in receiver_ids):
+			return
 
-	if existing is not None:
-		if str(existing[1]) == 'pending':
-			connection.execute(
-				"""
-				UPDATE roommate_requests
-				SET status = 'accepted', updated_at = CURRENT_TIMESTAMP
-				WHERE id = ?
-				""",
-				(int(existing[0]),),
-			)
-		return
-
-	connection.execute(
-		"""
-		INSERT INTO roommate_requests (sender_id, receiver_id, status)
-		VALUES (?, ?, 'accepted')
-		""",
-		(student_a, student_b),
-	)
+	accepted_request = roommateRequest(student_a, student_b)
+	accepted_request.accept_request(student_b)
+	accepted_request.updateStatus()
+	queued_requests.append(accepted_request)
 
 
 def get_interest_options(connection: sqlite3.Connection) -> list[tuple[int, str]]:
@@ -490,58 +517,44 @@ def get_student_interest_titles(connection: sqlite3.Connection, student_id: int)
 
 def add_interest_to_student(
 	connection: sqlite3.Connection,
-	student_id: int,
+	student: Student,
 	interest_title: str,
 ) -> tuple[bool, str]:
-	join_table = _get_interest_join_table(connection)
 	interest_id = _find_interest_id(connection, interest_title)
 	if interest_id is None:
 		return False, "That interest does not exist."
 
-	existing = connection.execute(
-		f"SELECT 1 FROM {join_table} WHERE student_id = ? AND interest_id = ? LIMIT 1",
-		(student_id, interest_id),
-	).fetchone()
-	if existing is not None:
+	if interest_title in student.interests:
 		return False, "Interest already exists in your profile."
 
-	columns = _table_columns(connection, join_table)
-	if "id" in columns:
-		next_id_row = connection.execute(f"SELECT COALESCE(MAX(id), 0) + 1 FROM {join_table}").fetchone()
-		next_id = int(next_id_row[0]) if next_id_row is not None else 1
-		connection.execute(
-			f"INSERT INTO {join_table} (id, student_id, interest_id) VALUES (?, ?, ?)",
-			(next_id, student_id, interest_id),
-		)
-	else:
-		connection.execute(
-			f"INSERT INTO {join_table} (student_id, interest_id) VALUES (?, ?)",
-			(student_id, interest_id),
-		)
+	updated_interests = set(student.interests)
+	updated_interests.add(interest_title)
+	student.interests = sorted(updated_interests)
 
-	connection.commit()
-	return True, "Interest added."
+	pending_interest_updates = _pending_interest_updates_for_connection(connection)
+	pending_interest_updates[int(student.id)] = set(student.interests)
+	return True, "Interest added. Save and Exit to persist."
 
 
 def remove_interest_from_student(
 	connection: sqlite3.Connection,
-	student_id: int,
+	student: Student,
 	interest_title: str,
 ) -> tuple[bool, str]:
-	join_table = _get_interest_join_table(connection)
 	interest_id = _find_interest_id(connection, interest_title)
 	if interest_id is None:
 		return False, "That interest does not exist."
 
-	result = connection.execute(
-		f"DELETE FROM {join_table} WHERE student_id = ? AND interest_id = ?",
-		(student_id, interest_id),
-	)
-	connection.commit()
-
-	if result.rowcount == 0:
+	if interest_title not in student.interests:
 		return False, "Interest was not in your profile."
-	return True, "Interest removed."
+
+	updated_interests = set(student.interests)
+	updated_interests.discard(interest_title)
+	student.interests = sorted(updated_interests)
+
+	pending_interest_updates = _pending_interest_updates_for_connection(connection)
+	pending_interest_updates[int(student.id)] = set(student.interests)
+	return True, "Interest removed. Save and Exit to persist."
 
 
 def _get_interest_join_table(connection: sqlite3.Connection) -> str:
