@@ -606,12 +606,14 @@ class LoginApp(App):
 		if is_in_profile:
 			success, message = remove_interest_from_student(
 				self.db_connection,
+				self.system,
 				self.current_student,
 				interest_title,
 			)
 		else:
 			success, message = add_interest_to_student(
 				self.db_connection,
+				self.system,
 				self.current_student,
 				interest_title,
 			)

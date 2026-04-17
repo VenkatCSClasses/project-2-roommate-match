@@ -13,6 +13,11 @@ _PENDING_ROOMMATE_REQUESTS: dict[int, list[roommateRequest]] = {}
 _PENDING_INTEREST_UPDATES: dict[int, dict[int, set[str]]] = {}
 
 
+# -----------------------------------------------------------------------------
+# Loading / saving helpers
+# -----------------------------------------------------------------------------
+
+
 def get_default_database_path() -> Path:
 	return Path(__file__).resolve().parents[2] / "app.db"
 
@@ -207,6 +212,72 @@ def persist_pending_interest_updates(connection: sqlite3.Connection) -> int:
 	return written_students
 
 
+def get_interest_options(connection: sqlite3.Connection) -> list[tuple[int, str]]:
+	if not _table_exists(connection, "interests"):
+		return []
+
+	rows = connection.execute("SELECT id, title FROM interests ORDER BY title").fetchall()
+	return [
+		(int(row[0]), str(row[1]))
+		for row in rows
+		if row
+		and row[0] is not None
+		and row[1] is not None
+		and str(row[1]).strip().lower() not in {"title", "interest"}
+	]
+
+
+def get_student_interest_titles(connection: sqlite3.Connection, student_id: int) -> list[str]:
+	return _get_student_interest_titles(connection, student_id)
+
+
+def add_interest_to_student(
+	connection: sqlite3.Connection,
+	system: RoommateSystem,
+	student: Student,
+	interest_title: str,
+) -> tuple[bool, str]:
+	if interest_title not in system.interest_options:
+		return False, "That interest does not exist."
+
+	if interest_title in student.interests:
+		return False, "Interest already exists in your profile."
+
+	updated_interests = set(student.interests)
+	updated_interests.add(interest_title)
+	student.interests = sorted(updated_interests)
+
+	pending_interest_updates = _pending_interest_updates_for_connection(connection)
+	pending_interest_updates[int(student.id)] = set(student.interests)
+	return True, "Interest added. Save and Exit to persist."
+
+
+def remove_interest_from_student(
+	connection: sqlite3.Connection,
+	system: RoommateSystem,
+	student: Student,
+	interest_title: str,
+) -> tuple[bool, str]:
+	if interest_title not in system.interest_options:
+		return False, "That interest does not exist."
+
+	if interest_title not in student.interests:
+		return False, "Interest was not in your profile."
+
+	updated_interests = set(student.interests)
+	updated_interests.discard(interest_title)
+	student.interests = sorted(updated_interests)
+
+	pending_interest_updates = _pending_interest_updates_for_connection(connection)
+	pending_interest_updates[int(student.id)] = set(student.interests)
+	return True, "Interest removed. Save and Exit to persist."
+
+
+# -----------------------------------------------------------------------------
+# Helpers that use the database
+# -----------------------------------------------------------------------------
+
+
 def _pending_interest_updates_for_connection(connection: sqlite3.Connection) -> dict[int, set[str]]:
 	connection_key = id(connection)
 	if connection_key not in _PENDING_INTEREST_UPDATES:
@@ -387,43 +458,6 @@ def revoke_specific_outgoing_roommate_request(
 	return result.rowcount > 0
 
 
-def back_out_of_roommate_group(connection: sqlite3.Connection, student_id: int) -> int:
-	ensure_roommate_requests_table(connection)
-
-	accepted_links = connection.execute(
-		"""
-		SELECT group_request_id, sender_id, receiver_id
-		FROM roommate_requests
-		WHERE status = 'accepted' AND (sender_id = ? OR receiver_id = ?)
-		""",
-		(student_id, student_id),
-	).fetchall()
-
-	other_member_ids: set[int] = set()
-	for _, sender_id, receiver_id in accepted_links:
-		if int(sender_id) == student_id and int(receiver_id) != student_id:
-			other_member_ids.add(int(receiver_id))
-		elif int(receiver_id) == student_id and int(sender_id) != student_id:
-			other_member_ids.add(int(sender_id))
-
-	result = connection.execute(
-		"""
-		UPDATE roommate_requests
-		SET status = 'withdrawn', updated_at = CURRENT_TIMESTAMP
-		WHERE status IN ('accepted', 'pending') AND (sender_id = ? OR receiver_id = ?)
-		""",
-		(student_id, student_id),
-	)
-
-	remaining_members = sorted(other_member_ids)
-	for index, left_member in enumerate(remaining_members):
-		for right_member in remaining_members[index + 1 :]:
-			_ensure_accepted_link_between(connection, left_member, right_member)
-
-	connection.commit()
-	return int(result.rowcount)
-
-
 def _next_group_request_id(connection: sqlite3.Connection) -> int:
 	row = connection.execute("SELECT COALESCE(MAX(group_request_id), 0) + 1 FROM roommate_requests").fetchone()
 	return int(row[0]) if row is not None else 1
@@ -494,67 +528,6 @@ def _ensure_accepted_link_between(connection: sqlite3.Connection, student_a: int
 	accepted_request.accept_request(student_b)
 	accepted_request.updateStatus()
 	queued_requests.append(accepted_request)
-
-
-def get_interest_options(connection: sqlite3.Connection) -> list[tuple[int, str]]:
-	if not _table_exists(connection, "interests"):
-		return []
-
-	rows = connection.execute("SELECT id, title FROM interests ORDER BY title").fetchall()
-	return [
-		(int(row[0]), str(row[1]))
-		for row in rows
-		if row
-		and row[0] is not None
-		and row[1] is not None
-		and str(row[1]).strip().lower() not in {"title", "interest"}
-	]
-
-
-def get_student_interest_titles(connection: sqlite3.Connection, student_id: int) -> list[str]:
-	return _get_student_interest_titles(connection, student_id)
-
-
-def add_interest_to_student(
-	connection: sqlite3.Connection,
-	student: Student,
-	interest_title: str,
-) -> tuple[bool, str]:
-	interest_id = _find_interest_id(connection, interest_title)
-	if interest_id is None:
-		return False, "That interest does not exist."
-
-	if interest_title in student.interests:
-		return False, "Interest already exists in your profile."
-
-	updated_interests = set(student.interests)
-	updated_interests.add(interest_title)
-	student.interests = sorted(updated_interests)
-
-	pending_interest_updates = _pending_interest_updates_for_connection(connection)
-	pending_interest_updates[int(student.id)] = set(student.interests)
-	return True, "Interest added. Save and Exit to persist."
-
-
-def remove_interest_from_student(
-	connection: sqlite3.Connection,
-	student: Student,
-	interest_title: str,
-) -> tuple[bool, str]:
-	interest_id = _find_interest_id(connection, interest_title)
-	if interest_id is None:
-		return False, "That interest does not exist."
-
-	if interest_title not in student.interests:
-		return False, "Interest was not in your profile."
-
-	updated_interests = set(student.interests)
-	updated_interests.discard(interest_title)
-	student.interests = sorted(updated_interests)
-
-	pending_interest_updates = _pending_interest_updates_for_connection(connection)
-	pending_interest_updates[int(student.id)] = set(student.interests)
-	return True, "Interest removed. Save and Exit to persist."
 
 
 def _get_interest_join_table(connection: sqlite3.Connection) -> str:
@@ -707,3 +680,8 @@ def _populate_preference_options(connection: sqlite3.Connection, system: Roommat
 		for row in rows
 		if row and row[0] is not None and str(row[0]).strip().lower() != "preference"
 	]
+
+
+# -----------------------------------------------------------------------------
+# Pure utility helpers
+# -----------------------------------------------------------------------------
