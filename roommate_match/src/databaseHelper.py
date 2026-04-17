@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sqlite3
-from csv import DictReader
 from pathlib import Path
 from typing import Any
 
@@ -449,20 +448,18 @@ def _ensure_accepted_link_between(connection: sqlite3.Connection, student_a: int
 
 
 def get_interest_options(connection: sqlite3.Connection) -> list[tuple[int, str]]:
-	if _table_exists(connection, "interests"):
-		rows = connection.execute("SELECT id, title FROM interests ORDER BY title").fetchall()
-		options = [
-			(int(row[0]), str(row[1]))
-			for row in rows
-			if row
-			and row[0] is not None
-			and row[1] is not None
-			and str(row[1]).strip().lower() not in {"title", "interest"}
-		]
-		if options:
-			return options
+	if not _table_exists(connection, "interests"):
+		return []
 
-	return _get_interest_options_from_csv()
+	rows = connection.execute("SELECT id, title FROM interests ORDER BY title").fetchall()
+	return [
+		(int(row[0]), str(row[1]))
+		for row in rows
+		if row
+		and row[0] is not None
+		and row[1] is not None
+		and str(row[1]).strip().lower() not in {"title", "interest"}
+	]
 
 
 def get_student_interest_titles(connection: sqlite3.Connection, student_id: int) -> list[str]:
@@ -554,30 +551,6 @@ def _find_interest_id(connection: sqlite3.Connection, interest_title: str) -> in
 	if row is None:
 		return None
 	return int(row[0])
-
-
-def _get_interest_options_from_csv() -> list[tuple[int, str]]:
-	csv_path = Path(__file__).resolve().parents[2] / "Dummy Data" / "interests.csv"
-	if not csv_path.exists():
-		return []
-
-	options: list[tuple[int, str]] = []
-	with csv_path.open("r", encoding="utf-8") as csv_file:
-		for row in DictReader(csv_file):
-			interest_id_raw = row.get("interest_id")
-			title_raw = row.get("title")
-			if interest_id_raw is None or title_raw is None:
-				continue
-			try:
-				interest_id = int(str(interest_id_raw).strip())
-			except ValueError:
-				continue
-			title = str(title_raw).strip()
-			if not title:
-				continue
-			options.append((interest_id, title))
-
-	return options
 
 
 def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
