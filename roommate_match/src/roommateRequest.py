@@ -25,3 +25,6 @@ class roommateRequest:
     
     def getReceiverIds(self):
         return self.receiver_ids
+
+    def isAccepted(self):
+        return self.accepted
