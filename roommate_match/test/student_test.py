@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch, MagicMock
 from src.Student import Student
 from src.system import RoommateSystem
 
@@ -78,9 +79,42 @@ class StudentTest(unittest.TestCase):
 
         self.student2.updateHometown("")
         self.assertEqual(self.student2.hometown, "")
+    
 
-    def test_updateInterests(self):
-        pass
+    @patch("sqlite3.connect")
+    @patch("builtins.input")
+    def test_updateInterests(self, mock_input, mock_connect):
+
+        mock_input.side_effect = [
+            "1", "add",       # add Music
+            "1", "add",       # duplicate add
+            "999",            # invalid ID
+            "2", "remove",    # remove Sports
+            "q"               # quit
+        ]
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = [(1, "Music"), (2, "Sports")]
+        mock_conn.cursor.return_value = mock_cursor
+        mock_connect.return_value = mock_conn
+
+        s = Student(1, "Alex", "a@b.com", "pw", "NY")
+        s.interests = ["Sports"]
+
+        s.updateInterests("fake.db")
+
+        # Test: Music was added
+        self.assertIn("Music", s.interests)
+
+        # Test: Duplicate add did not create a second Music
+        self.assertEqual(s.interests.count("Music"), 1)
+
+        # Test: Invalid ID did not change interests
+        self.assertIn("Sports", s.interests)
+
+        # Test: Sports was removed once
+        self.assertEqual(s.interests.count("Sports"), 1)
 
     def test_updatePreferences(self):
         pass
