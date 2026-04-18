@@ -104,16 +104,16 @@ class StudentTest(unittest.TestCase):
 
         s.updateInterests("fake.db")
 
-        # Test: Music was added
+        # Test music was added
         self.assertIn("Music", s.interests)
 
-        # Test: Duplicate add did not create a second Music
+        # Test duplicate add did not create a second Music
         self.assertEqual(s.interests.count("Music"), 1)
 
-        # Test: Invalid ID did not change interests
+        # Test invalid ID did not change interests
         self.assertIn("Sports", s.interests)
 
-        # Test: Sports was removed once
+        # Test sports was removed once
         self.assertEqual(s.interests.count("Sports"), 1)
 
     def test_updatePreferences(self):
