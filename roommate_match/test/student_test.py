@@ -140,17 +140,21 @@ class StudentTest(unittest.TestCase):
 
         s.updatePreferences("fake.db")
 
-        # Test cleanliness was added
         self.assertIn("Cleanliness", s.preferences)
-
-        # Test duplicate add did not create a second cleanliness
         self.assertEqual(s.preferences.count("Cleanliness"), 1)
-
-        # Test invalid ID did not change preferences
         self.assertIn("Quiet Hours", s.preferences)
-
-        # Test quiet hours was removed once
         self.assertEqual(s.preferences.count("Quiet Hours"), 1)
+
+        mock_cursor.execute.assert_any_call(
+            "INSERT INTO students_to_preference (student_id, preference_id) VALUES (?, ?)",
+            (1, 1)
+        )
+
+        mock_cursor.execute.assert_any_call(
+            "DELETE FROM students_to_preference WHERE student_id = ? AND preference_id = ?",
+            (1, 2)
+        )
+
 
 
     def test_viewStudents(self):
