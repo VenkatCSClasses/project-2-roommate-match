@@ -116,8 +116,41 @@ class StudentTest(unittest.TestCase):
         # Test sports was removed once
         self.assertEqual(s.interests.count("Sports"), 1)
 
-    def test_updatePreferences(self):
-        pass
+    @patch("sqlite3.connect")
+    @patch("builtins.input")
+    def test_updatePreferences(self, mock_input, mock_connect):
+
+        mock_input.side_effect = [
+            "1", "add",
+            "1", "add",
+            "999",
+            "2", "remove",
+            "q"
+        ]
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = [(1, "Cleanliness"), (2, "Quiet Hours")]
+        mock_conn.cursor.return_value = mock_cursor
+        mock_connect.return_value = mock_conn
+
+        s = Student(1, "Alex", "a@b.com", "pw", "NY")
+        s.preferences = ["Quiet Hours"]
+
+        s.updatePreferences("fake.db")
+
+        # Test cleanliness was added
+        self.assertIn("Cleanliness", s.preferences)
+
+        # Test duplicate add did not create a second cleanliness
+        self.assertEqual(s.preferences.count("Cleanliness"), 1)
+
+        # Test invalid ID did not change preferences
+        self.assertIn("Quiet Hours", s.preferences)
+
+        # Test quiet hours was removed once
+        self.assertEqual(s.preferences.count("Quiet Hours"), 1)
+
 
     def test_viewStudents(self):
         system = RoommateSystem()
