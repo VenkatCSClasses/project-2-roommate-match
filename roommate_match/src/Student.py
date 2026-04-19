@@ -126,7 +126,8 @@ class Student:
 
     def viewStudents(self):
         #View a list of all students in the system
-        pass
+        
+        return self.students
 
     def searchStudents(self, searchField: str):
         #Search for other students based on their name or student ID only

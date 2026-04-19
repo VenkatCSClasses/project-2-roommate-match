@@ -43,6 +43,9 @@ class RoommateSystem:
                 return student
         return None
     
+    def viewStudents(self):
+        return self.students
+    
     def gerenateGroupId(self):
         newGroupId = randint(1,10)
         existing_ids = [s.groupID for s in self.students]

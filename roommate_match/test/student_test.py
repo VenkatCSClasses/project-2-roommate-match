@@ -125,7 +125,7 @@ class StudentTest(unittest.TestCase):
         system.addStudent("Bob", "bob@test.com", "123", "CA")
         system.addStudent("Charlie", "charlie@test.com", "123", "TX")
 
-        students = self.student1.viewStudents(system)
+        students = system.viewStudents()
 
         # Ensures all 3 students are in list
         self.assertEqual(len(students), 3)
