@@ -129,6 +129,16 @@ class Student:
         
         return self.students
 
-    def searchStudents(self, searchField: str):
+    def searchStudents(self, searchField: str, system):
         #Search for other students based on their name or student ID only
-        pass
+        
+        if not searchField.isdigit():
+            raise ValueError("Search must be by numeric student ID only")
+
+        search_id = int(searchField)
+
+        for student in system.students:
+            if student.id == search_id:
+                return student
+
+        raise ValueError("No student found with that ID")

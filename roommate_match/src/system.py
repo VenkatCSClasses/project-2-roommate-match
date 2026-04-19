@@ -22,6 +22,7 @@ class RoommateSystem:
         student_id = self.generateId()
         student = Student(student_id, name, email, password, hometown)
         self.students.append(student)
+        return student
 
     def removeStudent(self, id):
         for student in self.students:
