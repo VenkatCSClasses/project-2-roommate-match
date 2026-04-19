@@ -120,9 +120,57 @@ class Student:
         conn.close()
 
 
-    def updatePreferences(self, new_preferences: list):
-        #Update the student's preferences for living with a roommate
-        pass
+    def updatePreferences(self, db_path: str):
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id, title FROM preferences")
+        all_preferences = cursor.fetchall()
+        preference_map = {row[0]: row[1] for row in all_preferences}
+
+        print("\n--- Available Preferences ---")
+        for pid, title in preference_map.items():
+            print(f"{pid}: {title}")
+
+        while True:
+            choice = input("\nEnter a preference ID to modify (or 'q' to quit): ").strip()
+
+            if choice.lower() == 'q':
+                print("Exiting preference update.")
+                break
+
+            if not choice.isdigit():
+                print("Please enter a valid numeric ID.")
+                continue
+
+            preference_id = int(choice)
+
+            if preference_id not in preference_map:
+                print("Invalid preference ID. Try again.")
+                continue
+
+            preference_title = preference_map[preference_id]
+            action = input(f"Do you want to add or remove '{preference_title}'? (add/remove): ").strip().lower()
+
+            if action == "add":
+                if preference_title in self.preferences:
+                    print(f"'{preference_title}' is already in your preferences.")
+                else:
+                    self.preferences.append(preference_title)
+                    print(f"Added '{preference_title}' to your preferences.")
+
+            elif action == "remove":
+                if preference_title in self.preferences:
+                    self.preferences.remove(preference_title)
+                    print(f"Removed '{preference_title}' from your preferences.")
+                else:
+                    print(f"'{preference_title}' is not in your preferences.")
+
+            else:
+                print("Invalid action. Type 'add' or 'remove'.")
+
+        conn.close()
+
 
     def viewStudents(self):
         #View a list of all students in the system

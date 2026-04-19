@@ -116,6 +116,7 @@ class StudentTest(unittest.TestCase):
         # Test sports was removed once
         self.assertEqual(s.interests.count("Sports"), 1)
 
+
     @patch("sqlite3.connect")
     @patch("builtins.input")
     def test_updatePreferences(self, mock_input, mock_connect):
