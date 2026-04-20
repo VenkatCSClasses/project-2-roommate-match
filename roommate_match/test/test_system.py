@@ -1,5 +1,7 @@
 import unittest
 from src.system import RoommateSystem
+from src.roommateRequest import roommateRequest
+from src.pairing import pairing
 
 class TestRoommateSystem(unittest.TestCase):
 
@@ -37,18 +39,30 @@ class TestRoommateSystem(unittest.TestCase):
         self.assertEqual(foundById1, student1)
         self.assertEqual(self.system.getStudentById(705000000), None)
 
-    def test_finalize_pairing(self):
-        self.system.addStudent("April", "a@test.com", "123", "NY")
-        self.system.addStudent("Bob", "b@test.com", "123", "CA")
+    def test_update_request_list_accepted(self):
+        request = roommateRequest(1, 2, 3)
+        request.accept_request(2) #all receivers accept
+        request.accept_request(3)
+        request.updateStatus()  #sets accepted = True
         
-        aprilStudents = self.system.getStudentByName("April")
-        s1 = aprilStudents[0]
-        
-        bobStudents = self.system.getStudentByName("Bob")
-        s2 = bobStudents[0]
-        
-        self.system.finalizePairing(s1.id, s2.id)
-        self.assertEqual(s1.groupID, s2.groupID)
+        initial_len = len(self.system.pairings)
+        self.system.updateRequestList(request)
+        self.assertEqual(len(self.system.pairings), initial_len + 1)
+
+        new_pairing = self.system.pairings[-1]
+        self.assertIn(1, new_pairing.group)
+        self.assertIn(2, new_pairing.group)
+        self.assertIn(3, new_pairing.group)
+
+    def test_update_request_list_rejected(self):
+        request = roommateRequest(1, 2, 3)
+        request.reject_request(2) #reject
+        request.updateStatus()  #sets accepted = True
+        self.system.requests.append(request)
+        initial_len = len(self.system.requests)
+        self.system.updateRequestList(request)
+
+        self.assertEqual(len(self.system.requests), initial_len - 1)
         
 
 if __name__ == "__main__":
