@@ -582,6 +582,15 @@ class LoginApp(App):
 		else:
 			sender_id = "Unknown"
 
+		if isinstance(request_model, roommateRequest) and self.current_student is not None:
+			current_student_id = int(self.current_student.id)
+			student_response = request_model.responses.get(current_student_id)
+			if student_response is True:
+				accept_button.add_class("hidden")
+				reject_button.add_class("hidden")
+				status.update(f"Selected request from student {sender_id}. You already accepted this request.")
+				return
+
 		accept_button.remove_class("hidden")
 		reject_button.remove_class("hidden")
 		status.update(f"Selected request from student {sender_id}. Choose Accept or Reject.")

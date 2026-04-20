@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .Student import Student
+from .pairing import pairing
 from .roommateRequest import roommateRequest
 from .system import RoommateSystem
 
@@ -358,6 +359,21 @@ def respond_to_roommate_request(
 			for existing_request in system.requests
 			if _request_id(existing_request) != int(request_id)
 		]
+
+	# Ensure the system request-list hook runs after request state changes.
+	update_request_list = getattr(system, "updateRequestList", None)
+	if callable(update_request_list):
+		try:
+			update_request_list(request)
+		except Exception:
+			# Fallback keeps behavior stable if system.updateRequestList is not callable-safe.
+			if request.isAccepted() is True:
+				group_id_generator = getattr(system, "generateGroupId", None)
+				if not callable(group_id_generator):
+					group_id_generator = getattr(system, "gerenateGroupId", None)
+				if callable(group_id_generator):
+					group_members = [int(request.getSenderId()), *[int(receiver_id) for receiver_id in request.getReceiverIds()]]
+					system.pairings.append(pairing(int(group_id_generator()), group_members))
 	return True
 
 
