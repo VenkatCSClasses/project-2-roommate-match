@@ -157,11 +157,21 @@ class Student:
                     print(f"'{preference_title}' is already in your preferences.")
                 else:
                     self.preferences.append(preference_title)
+                    cursor.execute(
+                        "INSERT INTO students_to_preference (student_id, preference_id) VALUES (?, ?)",
+                        (self.id, preference_id)
+                    )
+                    conn.commit()
                     print(f"Added '{preference_title}' to your preferences.")
 
             elif action == "remove":
                 if preference_title in self.preferences:
                     self.preferences.remove(preference_title)
+                    cursor.execute(
+                        "DELETE FROM students_to_preference WHERE student_id = ? AND preference_id = ?",
+                        (self.id, preference_id)
+                    )
+                    conn.commit()
                     print(f"Removed '{preference_title}' from your preferences.")
                 else:
                     print(f"'{preference_title}' is not in your preferences.")
@@ -170,6 +180,7 @@ class Student:
                 print("Invalid action. Type 'add' or 'remove'.")
 
         conn.close()
+
 
 
     def viewStudents(self):
