@@ -1,18 +1,45 @@
 import unittest
 from roommate_match.src.pairing import pairing
+from roommate_match.src.system import RoommateSystem
+from roommate_match.src.Student import Student
 
 class TestPairing(unittest.TestCase):
     def setUp(self):
-        self.pair = pairing(1, 2, 3)
+        self.mock_system = RoommateSystem()
+        self.mock_system.students = [
+            Student(205, "Alice", "alice@test.com", "123", "Montreal"),
+            Student(305, "Ben", "ben@test.com", "123", "Detroit"),
+            Student(405, "Cara", "cara@test.com", "123", "Dallas"),
+            Student(505, "Dan", "dan@test.com", "123", "Syracuse"),
+            Student(605, "Emma", "emma@test.com", "123", "Stamford"),
+            Student(705, "Frank", "frank@test.com", "123", "Los Angeles"),
+            Student(805, "Dennis", "dennis@test.com", "123", "Chicago"),
+        ]
 
-    def test_get_user1_id(self):
-        self.assertEqual(self.pair.get_user1_id(), 1)
+        RoommateSystem.students = self.mock_system.students
 
-    def test_get_user2_id(self):
-        self.assertEqual(self.pair.get_user2_id(), 2)
-    
-    def test_get_user3_id(self):
-        self.assertEqual(self.pair.get_user3_id(), 3)
+        self.pair1 = pairing(1, [205, 305])
+        self.pair2 = pairing(2, [405, 505, 605])
+        self.pair3 = pairing(3, [705, 805])
 
-    def test_get_user4_id(self):
-        self.assertIsNone(self.pair.get_user4_id())
+    def test_get_group_id(self):
+        self.assertEqual(self.pair1.get_group_id(), 1)
+        self.assertEqual(self.pair2.get_group_id(), 2)
+        self.assertEqual(self.pair3.get_group_id(), 3)
+
+    def test_get_students(self):
+        self.assertEqual(self.pair1.get_students(), [205, 305])
+        self.assertEqual(self.pair2.get_students(), [405, 505, 605])
+        self.assertEqual(self.pair3.get_students(), [705, 805])
+
+    def test_finalize_pairing(self):
+        self.pair1.finalize_pairing()
+        self.pair2.finalize_pairing()
+
+        for student in self.mock_system.students:
+            if student.id in [205, 305]:
+                self.assertEqual(student.groupID, 1)
+            elif student.id in [405, 505, 605]:
+                self.assertEqual(student.groupID, 2)
+            else:
+                self.assertEqual(student.groupID, -1)
