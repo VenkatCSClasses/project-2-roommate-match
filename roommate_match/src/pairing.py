@@ -1,5 +1,3 @@
-from src.system import RoommateSystem
-
 class pairing:
     def __init__(self, group_id, students):
         self.group_id = group_id
@@ -12,6 +10,7 @@ class pairing:
         return self.students
 
     def finalize_pairing(self):
+        from .system import RoommateSystem
         for student in RoommateSystem.students:
             if student.id in self.students:
                 student.groupID = self.group_id

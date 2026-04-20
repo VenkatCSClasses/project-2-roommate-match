@@ -92,7 +92,7 @@ class LoginApp(App):
 	}
 	"""
 
-	BINDINGS = [("q", "quit", "Quit")]
+	BINDINGS = []
 
 	def compose(self) -> ComposeResult:
 		yield Header()
@@ -103,6 +103,7 @@ class LoginApp(App):
 			yield Label("Password")
 			yield Input(placeholder="Enter password", password=True, id="password")
 			yield Button("Sign in", id="login-button", variant="primary")
+			yield Button("Save and Exit", id="login-save-exit-button", variant="error")
 			yield Label("", id="status")
 
 		with Container(id="student-menu", classes="hidden"):
@@ -141,12 +142,15 @@ class LoginApp(App):
 	def on_unmount(self) -> None:
 		if self.db_connection is not None:
 			persist_pending_interest_updates(self.db_connection)
-			persist_pending_roommate_requests(self.db_connection)
+			if self.system is not None:
+				persist_pending_roommate_requests(self.db_connection, self.system)
 			self.db_connection.close()
 
 	def on_button_pressed(self, event: Button.Pressed) -> None:
 		if event.button.id == "login-button":
 			self._submit_login()
+		elif event.button.id == "login-save-exit-button":
+			self._save_and_exit()
 		elif event.button.id == "view-students-button":
 			self._show_students_table()
 		elif event.button.id == "return-button":
@@ -311,7 +315,7 @@ class LoginApp(App):
 		self._set_students_view_mode(True)
 
 		if self.current_student is not None and self.db_connection is not None:
-			self.group_members = get_group_status_for_student(self.db_connection, int(self.current_student.id))
+			self.group_members = get_group_status_for_student(self.db_connection, self.system, int(self.current_student.id))
 
 		if not self.group_members:
 			group_details.update("No group yet. Select a student in View Other Students and send a roommate request.")
@@ -336,7 +340,7 @@ class LoginApp(App):
 			status.update("No logged-in student found.")
 			return
 
-		self.request_rows = get_incoming_roommate_requests(self.db_connection, int(self.current_student.id))
+		self.request_rows = get_incoming_roommate_requests(self.db_connection, self.system, int(self.current_student.id))
 		self.selected_request_id = None
 		self.request_table_mode = "incoming"
 
@@ -362,8 +366,11 @@ class LoginApp(App):
 
 		if not self.request_rows:
 			status.update("No roommate requests found.")
+			group_details.add_class("hidden")
 		else:
 			status.update("Select a request to show response actions.")
+			group_details.update("Select a request to view member statuses.")
+			group_details.remove_class("hidden")
 
 		requests_table.remove_class("hidden")
 		requests_table.focus()
@@ -425,7 +432,10 @@ class LoginApp(App):
 	def _render_students_table(self) -> None:
 		table = self.query_one("#students-table", DataTable)
 		table.clear(columns=True)
-		table.add_columns("Selected", "Student ID", "Student Name", "Interests")
+		table.add_column("Selected", width=10)
+		table.add_column("Student ID", width=12)
+		table.add_column("Student Name", width=24)
+		table.add_column("Interests", width=48)
 
 		selected_ids = set(self.selected_student_ids)
 		for student_id, student_name, interests in self.student_rows:
@@ -545,7 +555,7 @@ class LoginApp(App):
 
 		selected_names = self._selected_student_names()
 		new_request = roommateRequest(int(self.current_student.id), *self.selected_student_ids)
-		success, message = create_roommate_request(self.db_connection, new_request)
+		success, message = create_roommate_request(self.db_connection, self.system, new_request)
 		if not success:
 			status.update(message)
 			return
@@ -558,6 +568,7 @@ class LoginApp(App):
 		status = self.query_one("#menu-status", Label)
 		accept_button = self.query_one("#accept-request-button", Button)
 		reject_button = self.query_one("#reject-request-button", Button)
+		group_details = self.query_one("#group-details", Label)
 
 		if row_index < 0 or row_index >= len(self.request_rows):
 			return
@@ -574,6 +585,10 @@ class LoginApp(App):
 		accept_button.remove_class("hidden")
 		reject_button.remove_class("hidden")
 		status.update(f"Selected request from student {sender_id}. Choose Accept or Reject.")
+
+		if isinstance(request_model, roommateRequest):
+			group_details.update(self._format_request_member_statuses(request_model))
+			group_details.remove_class("hidden")
 
 	def _handle_interest_row_selection(self, row_index: int) -> None:
 		if row_index < 0 or row_index >= len(self.interest_rows):
@@ -632,8 +647,18 @@ class LoginApp(App):
 			status.update("Unable to connect to app.db.")
 			return
 
+		selected_row = next(
+			(row for row in self.request_rows if int(row["request_id"]) == int(self.selected_request_id)),
+			None,
+		)
+		request_model = selected_row["request"] if selected_row is not None else None
+		if not isinstance(request_model, roommateRequest):
+			status.update("Could not load request details.")
+			return
+
 		updated = respond_to_roommate_request(
 			self.db_connection,
+			self.system,
 			self.selected_request_id,
 			accept,
 			int(self.current_student.id) if self.current_student is not None else None,
@@ -650,6 +675,34 @@ class LoginApp(App):
 		if self.system is None:
 			return []
 		return list(self.system.interest_options)
+
+	def _format_request_member_statuses(self, request: roommateRequest) -> str:
+		lines = ["Request Member Details:"]
+		sender_name = self._student_name_from_id(int(request.getSenderId()))
+		sender_interests = self._student_interests_from_id(int(request.getSenderId()))
+		lines.append(f"- {sender_name} | Interests: {sender_interests} | Status: In")
+
+		for receiver_id in request.getReceiverIds():
+			receiver_id_int = int(receiver_id)
+			receiver_name = self._student_name_from_id(receiver_id_int)
+			receiver_interests = self._student_interests_from_id(receiver_id_int)
+			response = request.responses.get(receiver_id_int)
+			member_status = "Pending"
+			if response is True:
+				member_status = "Accepted"
+			elif response is False:
+				member_status = "Rejected"
+			lines.append(f"- {receiver_name} | Interests: {receiver_interests} | Status: {member_status}")
+
+		return "\n".join(lines)
+
+	def _student_interests_from_id(self, student_id: int) -> str:
+		if self.system is None:
+			return "No interests"
+		student = self.system.getStudentById(student_id)
+		if student is None or not student.interests:
+			return "No interests"
+		return ", ".join(student.interests)
 
 	def _update_current_student_interest_state(self, interest_title: str, should_have_interest: bool) -> None:
 		if self.current_student is None:
@@ -671,6 +724,11 @@ class LoginApp(App):
 		email_input = self.query_one("#email", Input)
 		password_input = self.query_one("#password", Input)
 
+		if self.db_connection is not None:
+			persist_pending_interest_updates(self.db_connection)
+			if self.system is not None:
+				persist_pending_roommate_requests(self.db_connection, self.system)
+
 		self._return_to_menu()
 		self.current_student = None
 		self.group_members = []
@@ -689,7 +747,8 @@ class LoginApp(App):
 	def _save_and_exit(self) -> None:
 		if self.db_connection is not None:
 			persist_pending_interest_updates(self.db_connection)
-			persist_pending_roommate_requests(self.db_connection)
+			if self.system is not None:
+				persist_pending_roommate_requests(self.db_connection, self.system)
 		self.exit()
 
 
