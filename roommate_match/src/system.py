@@ -45,7 +45,7 @@ class RoommateSystem:
                 return student
         return None
     
-    def gerenateGroupId(self):
+    def generateGroupId(self):
         newGroupId = randint(1,50)
         existing_ids = [s.groupID for s in self.students]
         while newGroupId in existing_ids:
@@ -55,12 +55,16 @@ class RoommateSystem:
 
 
     def updateRequestList(self, request):
-        if roommateRequest.isAccepted() == True:
+        if request.isAccepted() == True:
             senderID = request.getSenderId()
             group = []
             group.append(senderID)
             group.extend(request.getReceiverIds())     
-            self.pairings.append(pairing(self.generateGroupId(), group))
-                                 
-        if roommateRequest.isAccepted() == False:
-            self.remove(self.requests)
+            
+            new_pairing = pairing(self.generateGroupId(), group)
+            new_pairing.finalize_pairing(self)   
+            self.pairings.append(new_pairing)
+
+        else:
+            if request in self.requests:
+                self.requests.remove(request)

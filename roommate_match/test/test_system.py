@@ -1,7 +1,7 @@
 import unittest
 from src.system import RoommateSystem
 from src.roommateRequest import roommateRequest
-from src.pairing import pairing
+
 
 class TestRoommateSystem(unittest.TestCase):
 
@@ -50,9 +50,9 @@ class TestRoommateSystem(unittest.TestCase):
         self.assertEqual(len(self.system.pairings), initial_len + 1)
 
         new_pairing = self.system.pairings[-1]
-        self.assertIn(1, new_pairing.group)
-        self.assertIn(2, new_pairing.group)
-        self.assertIn(3, new_pairing.group)
+        self.assertIn(1, new_pairing.group_id)
+        self.assertIn(2, new_pairing.group_id)
+        self.assertIn(3, new_pairing.group_id)
 
     def test_update_request_list_rejected(self):
         request = roommateRequest(1, 2, 3)
