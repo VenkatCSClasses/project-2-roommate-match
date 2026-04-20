@@ -188,16 +188,22 @@ class Student:
         
         return self.students
 
-    def searchStudents(self, searchField: str, system):
-        #Search for other students based on their name or student ID only
-        
-        if not searchField.isdigit():
-            raise ValueError("Search must be by numeric student ID only")
+    def searchStudents(self, searchField, system):
+        while True:
+            if not searchField.isdigit():
+                print("Search must be by numeric student ID only.")
+            else:
+                target_id = int(searchField)
+                for student in system.students:
+                    if student.id == target_id:
+                        print(f"Found student: {student.name} ({student.id})")
+                        break
+                else:
+                    print("Student not found.")
 
-        search_id = int(searchField)
+            again = input("Search again? (y/n): ").strip().lower()
+            if again != "y":
+                break
 
-        for student in system.students:
-            if student.id == search_id:
-                return student
+            searchField = input("Enter a student ID to search: ").strip()
 
-        raise ValueError("No student found with that ID")
