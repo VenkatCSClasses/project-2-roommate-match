@@ -68,3 +68,9 @@ class RoommateSystem:
         else:
             if request in self.requests:
                 self.requests.remove(request)
+
+    def finalize_pairing(self):
+        for student in self.students:
+            for pairing in self.pairings:
+                if student.id in pairing.students:
+                    student.groupID = pairing.group_id

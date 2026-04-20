@@ -8,8 +8,3 @@ class pairing:
 
     def get_students(self):
         return self.students
-
-    def finalize_pairing(self, system):
-        for student in system.students:
-            if student.id in self.students:
-                student.groupID = self.group_id
