@@ -18,6 +18,19 @@ CREATE Table interests (
     title VARCHAR(100)
 );
 
+CREATE Table preferences (
+    id INT PRIMARY KEY,
+    title VARCHAR(100)
+);
+
+CREATE Table students_to_preference (
+    id INT PRIMARY KEY,
+    student_id INT,
+    preference_id INT,
+    FOREIGN KEY (student_id) REFERENCES students(id),
+    FOREIGN KEY (preference_id) REFERENCES preferences(id)
+);
+
 CREATE Table groups (
     id INT PRIMARY KEY
 );

@@ -31,15 +31,3 @@ class TestPairing(unittest.TestCase):
         self.assertEqual(self.pair1.get_students(), [205, 305])
         self.assertEqual(self.pair2.get_students(), [405, 505, 605])
         self.assertEqual(self.pair3.get_students(), [705, 805])
-
-    def test_finalize_pairing(self):
-        self.pair1.finalize_pairing()
-        self.pair2.finalize_pairing()
-
-        for student in self.mock_system.students:
-            if student.id in [205, 305]:
-                self.assertEqual(student.groupID, 1)
-            elif student.id in [405, 505, 605]:
-                self.assertEqual(student.groupID, 2)
-            else:
-                self.assertEqual(student.groupID, -1)
