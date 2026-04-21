@@ -26,6 +26,7 @@ class LoginApp(App):
 	db_connection = None
 	system: RoommateSystem | None = None
 	current_student = None
+	current_admin_name: str | None = None
 	db_connection_error: bool = False
 	student_rows: list[tuple[str, str, str]] = []
 	selected_student_ids: list[int] = []
@@ -50,6 +51,13 @@ class LoginApp(App):
 	}
 
 	#student-menu {
+		width: 100%;
+		padding: 2 3;
+		border: round $accent;
+		background: $panel;
+	}
+
+	#admin-menu {
 		width: 100%;
 		padding: 2 3;
 		border: round $accent;
@@ -126,6 +134,15 @@ class LoginApp(App):
 			yield Button("Accept Request", id="accept-request-button", variant="primary", classes="hidden")
 			yield Button("Reject Request", id="reject-request-button", variant="error", classes="hidden")
 			yield Label("", id="group-details", classes="hidden")
+
+		with Container(id="admin-menu", classes="hidden"):
+			yield Label("Admin Menu", id="title")
+			yield Label("", id="admin-menu-welcome")
+			yield Button("Create Student", id="admin-create-student-button", variant="primary")
+			yield Button("Finalize Pairing", id="admin-finalize-pairing-button", variant="primary")
+			yield Button("Logout", id="admin-logout-button", variant="default")
+			yield Button("Save and Exit", id="admin-save-exit-button", variant="error")
+			yield Label("", id="admin-menu-status")
 		yield Footer()
 
 	def on_mount(self) -> None:
@@ -175,6 +192,14 @@ class LoginApp(App):
 			self._respond_to_selected_request(True)
 		elif event.button.id == "reject-request-button":
 			self._respond_to_selected_request(False)
+		elif event.button.id == "admin-create-student-button":
+			self.query_one("#admin-menu-status", Label).update("Create Student coming soon.")
+		elif event.button.id == "admin-finalize-pairing-button":
+			self.query_one("#admin-menu-status", Label).update("Finalize Pairing coming soon.")
+		elif event.button.id == "admin-logout-button":
+			self._logout()
+		elif event.button.id == "admin-save-exit-button":
+			self._save_and_exit()
 
 	def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
 		if event.data_table.id == "students-table":
@@ -225,23 +250,47 @@ class LoginApp(App):
 			return
 
 		student = self._authenticate_student(email, password)
-		if student is None:
+		if student is not None:
+			self.current_student = student
+			self.current_admin_name = None
+			self.group_members = []
+			status.update(f"Signed in as {student.name}.")
+			self._show_student_menu(student.name)
+			return
+
+		admin_name = self._authenticate_admin(email, password)
+		if admin_name is None:
 			status.update("Invalid email or password.")
 			return
 
-		self.current_student = student
-		self.group_members = []
-		status.update(f"Signed in as {student.name}.")
-		self._show_student_menu(student.name)
+		self.current_student = None
+		self.current_admin_name = admin_name
+		status.update(f"Signed in as admin {admin_name}.")
+		self._show_admin_menu(admin_name)
 
 	def _show_student_menu(self, email: str) -> None:
 		login_panel = self.query_one("#login-panel", Container)
 		student_menu = self.query_one("#student-menu", Container)
+		admin_menu = self.query_one("#admin-menu", Container)
 		welcome = self.query_one("#menu-welcome", Label)
 
 		welcome.update(f"Welcome, {email}")
+		admin_menu.add_class("hidden")
 		login_panel.add_class("hidden")
 		student_menu.remove_class("hidden")
+
+	def _show_admin_menu(self, admin_name: str) -> None:
+		login_panel = self.query_one("#login-panel", Container)
+		student_menu = self.query_one("#student-menu", Container)
+		admin_menu = self.query_one("#admin-menu", Container)
+		welcome = self.query_one("#admin-menu-welcome", Label)
+		admin_status = self.query_one("#admin-menu-status", Label)
+
+		welcome.update(f"Welcome, {admin_name}")
+		admin_status.update("")
+		student_menu.add_class("hidden")
+		login_panel.add_class("hidden")
+		admin_menu.remove_class("hidden")
 
 	def _authenticate_student(self, email: str, password: str):
 		if self.system is None:
@@ -251,6 +300,22 @@ class LoginApp(App):
 			if student.email == email and student.password == password:
 				return student
 		return None
+
+	def _authenticate_admin(self, email: str, password: str) -> str | None:
+		if self.db_connection is None:
+			return None
+
+		try:
+			row = self.db_connection.execute(
+				"SELECT name FROM admins WHERE email = ? AND password = ? LIMIT 1",
+				(email, password),
+			).fetchone()
+		except Exception:
+			return None
+
+		if row is None:
+			return None
+		return str(row[0])
 
 	def _fetch_students_with_interests(self) -> list[tuple[str, str, str]]:
 		if self.system is None:
@@ -870,6 +935,7 @@ class LoginApp(App):
 	def _logout(self) -> None:
 		login_panel = self.query_one("#login-panel", Container)
 		student_menu = self.query_one("#student-menu", Container)
+		admin_menu = self.query_one("#admin-menu", Container)
 		login_status = self.query_one("#status", Label)
 		welcome = self.query_one("#menu-welcome", Label)
 		email_input = self.query_one("#email", Input)
@@ -882,6 +948,7 @@ class LoginApp(App):
 
 		self._return_to_menu()
 		self.current_student = None
+		self.current_admin_name = None
 		self.group_members = []
 		self.student_rows = []
 		self.selected_student_ids = []
@@ -890,6 +957,7 @@ class LoginApp(App):
 		welcome.update("")
 		email_input.value = ""
 		password_input.value = ""
+		admin_menu.add_class("hidden")
 		student_menu.add_class("hidden")
 		login_panel.remove_class("hidden")
 		login_status.update("Logged out.")
