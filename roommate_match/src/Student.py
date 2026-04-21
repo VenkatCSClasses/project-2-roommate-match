@@ -207,3 +207,8 @@ class Student:
 
             searchField = input("Enter a student ID to search: ").strip()
 
+    def rankStudentsByMatch(self, allStudents):
+        # will return a list of students sorted by match score
+        pass
+
+

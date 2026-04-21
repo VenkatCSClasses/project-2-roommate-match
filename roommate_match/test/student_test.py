@@ -194,6 +194,32 @@ class StudentTest(unittest.TestCase):
             self.student1.searchStudents("Alice", system)
 
 
+    def test_rankStudentsByMatch(self):
+        s1 = Student(1, "A", "a@a.com", "pw", "NY")
+        s2 = Student(2, "B", "b@b.com", "pw", "NY")
+        s3 = Student(3, "C", "c@c.com", "pw", "NY")
+        s4 = Student(4, "D", "d@d.com", "pw", "NY")
+
+        s1.interests = ["Music", "Sports", "Travel"]
+        s1.preferences = ["Cleanliness", "Warm Room"]
+
+        s2.interests = ["Music", "Travel"]
+        s2.preferences = ["Cleanliness"]
+
+        s3.interests = ["Sports"]
+        s3.preferences = ["Warm Room"]
+
+        s4.interests = ["Movies"]
+        s4.preferences = ["Cool Room"]
+
+        ranked = rankStudentsByMatch(s1, [s1, s2, s3, s4])
+
+        self.assertEqual(ranked[0].id, 2)
+        self.assertEqual(ranked[1].id, 3)
+        self.assertEqual(ranked[2].id, 4)
+
+
+
 
 if __name__ == '__main__':
     unittest.main()
