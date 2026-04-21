@@ -63,6 +63,25 @@ class TestRoommateSystem(unittest.TestCase):
         self.system.updateRequestList(request)
 
         self.assertEqual(len(self.system.requests), initial_len - 1)
+
+    def test_finalize_pairing(self):
+        self.system.addStudent("Julia", "j@gmail.com", "123", "Ithaca")
+        self.system.addStudent("Bob", "bob@gmail.com", "123", "Liverpool")
+        self.system.addStudent("April", "april@gmail.com", "123", "Liverpool")
+        self.system.addStudent("Dylan", "dylan@gmail.com", "123", "Liverpool")
+        student1 = self.system.students[0]
+        student2 = self.system.students[1]
+        student3 = self.system.students[2]
+        student4 = self.system.students[3]
+        self.assertEqual(student1.groupID, student2.groupID)
+        self.system.pairings.append(pairing(1, [student1.id, student2.id]))
+        self.system.finalize_pairing()
+        self.assertEqual(student1.groupID, 1)
+        self.assertEqual(student2.groupID, 1)
+
+        self.assertNotEqual(student3.groupID, 1)
+        self.assertNotEqual(student4.groupID, 1)
+        self.assertNotEqual(student1.groupID, student3.groupID)
         
 
 if __name__ == "__main__":
