@@ -10,8 +10,3 @@ class pairing:
     def get_students(self):
         return self.students
 
-    def finalize_pairing(self):
-        from .system import RoommateSystem
-        for student in RoommateSystem.students:
-            if student.id in self.students:
-                student.groupID = self.group_id

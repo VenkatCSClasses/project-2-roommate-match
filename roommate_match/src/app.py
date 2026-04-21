@@ -10,6 +10,7 @@ from .databaseHelper import (
 	create_roommate_request,
 	get_group_status_for_student,
 	get_incoming_roommate_requests,
+	get_outgoing_roommate_requests,
 	persist_pending_interest_updates,
 	persist_pending_roommate_requests,
 	remove_interest_from_student,
@@ -110,8 +111,9 @@ class LoginApp(App):
 			yield Label("Student Menu", id="title")
 			yield Label("", id="menu-welcome")
 			yield Button("View Other Students", id="view-students-button", variant="primary")
+			yield Button("View Request Status", id="view-request-status-button", variant="primary")
 			yield Button("View Group Status", id="make-group-button", variant="primary")
-			yield Button("View Roommate Requests", id="view-requests-button", variant="primary")
+			yield Button("Respond to Requests", id="view-requests-button", variant="primary")
 			yield Button("Change Interests", id="change-interests-button", variant="primary")
 			yield Button("Logout", id="logout-button", variant="default")
 			yield Button("Save and Exit", id="save-exit-button", variant="error")
@@ -153,6 +155,8 @@ class LoginApp(App):
 			self._save_and_exit()
 		elif event.button.id == "view-students-button":
 			self._show_students_table()
+		elif event.button.id == "view-request-status-button":
+			self._show_request_status_menu()
 		elif event.button.id == "return-button":
 			self._return_to_menu()
 		elif event.button.id == "make-group-button":
@@ -271,6 +275,25 @@ class LoginApp(App):
 			status.update("Unable to connect to app.db.")
 			return
 
+		block_message = self._student_request_or_group_block_message()
+		if block_message is not None:
+			self.student_rows = []
+			self.selected_student_ids = []
+			self.selected_student_id = None
+			self.selected_request_id = None
+			self.request_table_mode = None
+			self._set_students_view_mode(True)
+			table.add_class("hidden")
+			requests_table.add_class("hidden")
+			interests_table.add_class("hidden")
+			self.query_one("#accept-request-button", Button).add_class("hidden")
+			self.query_one("#reject-request-button", Button).add_class("hidden")
+			self.query_one("#send-request-button", Button).add_class("hidden")
+			group_details.update(block_message)
+			group_details.remove_class("hidden")
+			status.update("You cannot send a new request right now.")
+			return
+
 		students = self._fetch_students_with_interests()
 		self.student_rows = students
 		self.selected_student_ids = []
@@ -294,6 +317,37 @@ class LoginApp(App):
 		table.remove_class("hidden")
 		table.focus()
 
+	def _student_request_or_group_block_message(self) -> str | None:
+		if self.current_student is None or self.db_connection is None or self.system is None:
+			return None
+
+		if int(self.current_student.groupID) >= 0:
+			return (
+				"You already have an active request. "
+				"Complete your current request before sending a new one."
+			)
+
+		incoming_requests = get_incoming_roommate_requests(
+			self.db_connection,
+			self.system,
+			int(self.current_student.id),
+		)
+		if any(str(request_row.get("status", "")).lower() == "pending" for request_row in incoming_requests):
+			return (
+				"You are in a pending request. To send another request, open Respond to Requests "
+				"and reject the incoming request first."
+			)
+
+		outgoing_requests = get_outgoing_roommate_requests(
+			self.db_connection,
+			self.system,
+			int(self.current_student.id),
+		)
+		if outgoing_requests:
+			return "You already have an active request. Wait for it to finish before sending another one."
+
+		return None
+
 	def _show_group_status_menu(self, info_message: str | None = None) -> None:
 		status = self.query_one("#menu-status", Label)
 		table = self.query_one("#students-table", DataTable)
@@ -314,17 +368,75 @@ class LoginApp(App):
 		self.selected_request_id = None
 		self._set_students_view_mode(True)
 
-		if self.current_student is not None and self.db_connection is not None:
-			self.group_members = get_group_status_for_student(self.db_connection, self.system, int(self.current_student.id))
+		if self.current_student is None or self.system is None:
+			group_details.update("No pairings yet.")
+			status.update(info_message or "No pairing created yet.")
+			group_details.remove_class("hidden")
+			return
 
-		if not self.group_members:
-			group_details.update("No group yet. Select a student in View Other Students and send a roommate request.")
-			status.update(info_message or "No group created yet.")
+		current_pairing = self._pairing_for_student(int(self.current_student.id))
+		if current_pairing is None:
+			group_details.update("No pairing yet. A pairing only appears after everyone accepts the request.")
+			status.update(info_message or "No pairing created yet.")
 		else:
-			group_details.update(self._format_group_status())
-			status.update(info_message or "Group status loaded.")
+			group_members = [
+				self.system.getStudentById(int(student_id))
+				for student_id in current_pairing.get_students()
+			]
+			group_members = [student for student in group_members if student is not None]
+			group_details.update(self._format_assigned_group_status(group_members))
+			status.update(info_message or "Pairing status loaded.")
 
 		group_details.remove_class("hidden")
+
+	def _show_request_status_menu(self) -> None:
+		status = self.query_one("#menu-status", Label)
+		students_table = self.query_one("#students-table", DataTable)
+		requests_table = self.query_one("#requests-table", DataTable)
+		interests_table = self.query_one("#interests-table", DataTable)
+		send_button = self.query_one("#send-request-button", Button)
+		accept_button = self.query_one("#accept-request-button", Button)
+		reject_button = self.query_one("#reject-request-button", Button)
+		group_details = self.query_one("#group-details", Label)
+
+		if self.current_student is None or self.db_connection is None or self.system is None:
+			status.update("No logged-in student found.")
+			return
+
+		self.request_rows = get_outgoing_roommate_requests(
+			self.db_connection,
+			self.system,
+			int(self.current_student.id),
+		)
+		self.selected_request_id = None
+		self.request_table_mode = "outgoing"
+
+		requests_table.clear(columns=True)
+		requests_table.add_columns("Request ID", "Members", "Status")
+		for request_row in self.request_rows:
+			all_member_ids = [int(request_row["sender_id"]), *[int(member_id) for member_id in request_row["receiver_ids"]]]
+			member_names = ", ".join(self._student_name_from_id(member_id) for member_id in all_member_ids)
+			requests_table.add_row(
+				str(request_row["request_id"]),
+				member_names,
+				str(request_row["status"]).capitalize(),
+			)
+
+		students_table.add_class("hidden")
+		interests_table.add_class("hidden")
+		send_button.add_class("hidden")
+		accept_button.add_class("hidden")
+		reject_button.add_class("hidden")
+		group_details.add_class("hidden")
+		self._set_students_view_mode(True)
+
+		if not self.request_rows:
+			status.update("You have no outgoing requests yet.")
+		else:
+			status.update("Outgoing request statuses loaded.")
+
+		requests_table.remove_class("hidden")
+		requests_table.focus()
 
 	def _show_roommate_requests_menu(self) -> None:
 		status = self.query_one("#menu-status", Label)
@@ -429,6 +541,26 @@ class LoginApp(App):
 			lines.append(f"- {member_name}: {member['status']}")
 		return "\n".join(lines)
 
+	def _format_assigned_group_status(self, group_members: list[object]) -> str:
+		lines = ["Current Pairing"]
+		if not group_members:
+			lines.append("- No members found for this pairing.")
+			return "\n".join(lines)
+
+		lines.append("Members:")
+		for member in sorted(group_members, key=lambda student: str(student.name).lower()):
+			lines.append(f"- {member.name}")
+		return "\n".join(lines)
+
+	def _pairing_for_student(self, student_id: int):
+		if self.system is None:
+			return None
+
+		for pairing in self.system.pairings:
+			if student_id in [int(member_id) for member_id in pairing.get_students()]:
+				return pairing
+		return None
+
 	def _render_students_table(self) -> None:
 		table = self.query_one("#students-table", DataTable)
 		table.clear(columns=True)
@@ -467,6 +599,7 @@ class LoginApp(App):
 	def _set_students_view_mode(self, enabled: bool) -> None:
 		menu_buttons = (
 			self.query_one("#view-students-button", Button),
+			self.query_one("#view-request-status-button", Button),
 			self.query_one("#make-group-button", Button),
 			self.query_one("#view-requests-button", Button),
 			self.query_one("#change-interests-button", Button),
@@ -582,6 +715,15 @@ class LoginApp(App):
 		else:
 			sender_id = "Unknown"
 
+		if self.request_table_mode != "incoming":
+			accept_button.add_class("hidden")
+			reject_button.add_class("hidden")
+			status.update(f"Selected request from student {sender_id}. This is a status-only view.")
+			if isinstance(request_model, roommateRequest):
+				group_details.update(self._format_request_member_statuses(request_model))
+				group_details.remove_class("hidden")
+			return
+
 		if isinstance(request_model, roommateRequest) and self.current_student is not None:
 			current_student_id = int(self.current_student.id)
 			student_response = request_model.responses.get(current_student_id)
@@ -689,7 +831,7 @@ class LoginApp(App):
 		lines = ["Request Member Details:"]
 		sender_name = self._student_name_from_id(int(request.getSenderId()))
 		sender_interests = self._student_interests_from_id(int(request.getSenderId()))
-		lines.append(f"- {sender_name} | Interests: {sender_interests} | Status: In")
+		lines.append(f"- {sender_name} | Interests: {sender_interests} | Status: Accepted")
 
 		for receiver_id in request.getReceiverIds():
 			receiver_id_int = int(receiver_id)
