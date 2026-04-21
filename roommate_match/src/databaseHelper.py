@@ -646,8 +646,3 @@ def _populate_preference_options(connection: sqlite3.Connection, system: Roommat
 		for row in rows
 		if row and row[0] is not None and str(row[0]).strip().lower() != "preference"
 	]
-
-
-# -----------------------------------------------------------------------------
-# Pure utility helpers
-# -----------------------------------------------------------------------------
