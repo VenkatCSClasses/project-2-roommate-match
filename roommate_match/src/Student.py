@@ -105,11 +105,21 @@ class Student:
                     print(f"'{interest_title}' is already in your interests.")
                 else:
                     self.interests.append(interest_title)
+                    cursor.execute(
+                        "INSERT INTO students_to_interest (student_id, interest_id) VALUES (?, ?)",
+                        (self.id, interest_id)
+                    )
+                    conn.commit()
                     print(f"Added '{interest_title}' to your interests.")
 
             elif action == "remove":
                 if interest_title in self.interests:
                     self.interests.remove(interest_title)
+                    cursor.execute(
+                        "DELETE FROM students_to_interest WHERE student_id = ? AND interest_id = ?",
+                        (self.id, interest_id)
+                    )
+                    conn.commit()
                     print(f"Removed '{interest_title}' from your interests.")
                 else:
                     print(f"'{interest_title}' is not in your interests.")
@@ -183,32 +193,41 @@ class Student:
 
 
 
+
     def viewStudents(self):
         #View a list of all students in the system
         
         return self.students
 
     def searchStudents(self, searchField, system):
-        while True:
-            if not searchField.isdigit():
-                print("Search must be by numeric student ID only.")
-            else:
-                target_id = int(searchField)
-                for student in system.students:
-                    if student.id == target_id:
-                        print(f"Found student: {student.name} ({student.id})")
-                        break
-                else:
-                    print("Student not found.")
+        if not searchField.isdigit():
+            raise ValueError("Search must be by numeric student ID only")
 
-            again = input("Search again? (y/n): ").strip().lower()
-            if again != "y":
-                break
+        target_id = int(searchField)
 
-            searchField = input("Enter a student ID to search: ").strip()
+        for student in system.students:
+            if student.id == target_id:
+                return student
+
+        raise ValueError("Student not found")
+
 
     def rankStudentsByMatch(self, allStudents):
-        # will return a list of students sorted by match score
-        pass
+        ranked = []
+
+        for other in allStudents:
+            if other.id == self.id:
+                continue
+
+            interestMatches = len(set(self.interests) & set(other.interests))
+            preferenceMatches = len(set(self.preferences) & set(other.preferences))
+            totalScore = interestMatches + preferenceMatches
+
+            ranked.append((totalScore, other))
+
+        ranked.sort(key=lambda x: x[0], reverse=True)
+
+        return [student for score, student in ranked]
+
 
 

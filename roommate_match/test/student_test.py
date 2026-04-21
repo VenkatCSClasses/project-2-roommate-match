@@ -86,11 +86,11 @@ class StudentTest(unittest.TestCase):
     def test_updateInterests(self, mock_input, mock_connect):
 
         mock_input.side_effect = [
-            "1", "add",       # add Music
-            "1", "add",       # duplicate add
-            "999",            # invalid ID
-            "2", "remove",    # remove Sports
-            "q"               # quit
+            "1", "add",
+            "1", "add",
+            "999",
+            "2", "remove",
+            "q"
         ]
 
         mock_conn = MagicMock()
@@ -104,17 +104,21 @@ class StudentTest(unittest.TestCase):
 
         s.updateInterests("fake.db")
 
-        # Test music was added
         self.assertIn("Music", s.interests)
-
-        # Test duplicate add did not create a second Music
         self.assertEqual(s.interests.count("Music"), 1)
 
-        # Test invalid ID did not change interests
-        self.assertIn("Sports", s.interests)
+        self.assertNotIn("Sports", s.interests)
 
-        # Test sports was removed once
-        self.assertEqual(s.interests.count("Sports"), 1)
+        mock_cursor.execute.assert_any_call(
+            "INSERT INTO students_to_interest (student_id, interest_id) VALUES (?, ?)",
+            (1, 1)
+        )
+
+        mock_cursor.execute.assert_any_call(
+            "DELETE FROM students_to_interest WHERE student_id = ? AND interest_id = ?",
+            (1, 2)
+        )
+
 
 
     @patch("sqlite3.connect")
@@ -142,8 +146,8 @@ class StudentTest(unittest.TestCase):
 
         self.assertIn("Cleanliness", s.preferences)
         self.assertEqual(s.preferences.count("Cleanliness"), 1)
-        self.assertIn("Quiet Hours", s.preferences)
-        self.assertEqual(s.preferences.count("Quiet Hours"), 1)
+
+        self.assertNotIn("Quiet Hours", s.preferences)
 
         mock_cursor.execute.assert_any_call(
             "INSERT INTO students_to_preference (student_id, preference_id) VALUES (?, ?)",
@@ -154,6 +158,7 @@ class StudentTest(unittest.TestCase):
             "DELETE FROM students_to_preference WHERE student_id = ? AND preference_id = ?",
             (1, 2)
         )
+
 
 
 
@@ -212,11 +217,12 @@ class StudentTest(unittest.TestCase):
         s4.interests = ["Movies"]
         s4.preferences = ["Cool Room"]
 
-        ranked = rankStudentsByMatch(s1, [s1, s2, s3, s4])
+        ranked = s1.rankStudentsByMatch([s1, s2, s3, s4])
 
         self.assertEqual(ranked[0].id, 2)
         self.assertEqual(ranked[1].id, 3)
         self.assertEqual(ranked[2].id, 4)
+
 
 
 
