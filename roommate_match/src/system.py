@@ -54,20 +54,21 @@ class RoommateSystem:
         return newGroupId
 
 
-    def updateRequestList(self, request):
-        if request.isAccepted() == True:
-            senderID = request.getSenderId()
-            group = []
-            group.append(senderID)
-            group.extend(request.getReceiverIds())     
-            
-            new_pairing = pairing(self.generateGroupId(), group)
-            new_pairing.finalize_pairing(self)   
-            self.pairings.append(new_pairing)
-
-        else:
-            if request in self.requests:
+    def updateRequestList(self):
+        for request in self.requests:
+            if request.isAccepted() == True:
+                senderID = request.getSenderId()
+                group = []
+                group.append(senderID)
+                group.extend(request.getReceiverIds())     
+                
+                new_pairing = pairing(self.generateGroupId(), group)
+                new_pairing.finalize_pairing(self)   
+                self.pairings.append(new_pairing)
                 self.requests.remove(request)
+
+            if request.isAccepted() == False:
+                    self.requests.remove(request)
 
     def finalize_pairing(self):
         for student in self.students:
