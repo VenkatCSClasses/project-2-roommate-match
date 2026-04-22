@@ -8,13 +8,12 @@ class pairing:
         return self.group_id
 
     def get_students(self):
-<<<<<<< HEAD
         return self.students
 
-    def finalize_pairing(self):
-        for student in RoommateSystem.students:
-            if student.id in self.students:
-                student.groupID = self.group_id
+    # def finalize_pairing(self):
+    #     for student in RoommateSystem.students:
+    #         if student.id in self.students:
+    #             student.groupID = self.group_id
 
     def requestToPairing(self, request):
         group = [request.sender_id] + request.receiver_ids
@@ -22,6 +21,4 @@ class pairing:
         self.pairings.append(new_pairing)
         if request in self.requests:
             self.requests.remove(request)
-=======
         return self.students
->>>>>>> 8396e8162d8f6ae6488e2aa5c0f381643678888d
