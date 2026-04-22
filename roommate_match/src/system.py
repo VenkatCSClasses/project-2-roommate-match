@@ -1,12 +1,16 @@
 from random import randint
 from src.Student import Student
+from src.roommateRequest import roommateRequest
+from src.pairing import pairing
 
 class RoommateSystem:
     def __init__(self):
         self.students = []
-        #self.matches = []
         self.preference_options = []
         self.interest_options = []
+        self.pairings = []
+        self.requests = []
+        self.next_group_id = 1
 
     def generateId(self):
         newId = int("705" + str(randint(100000, 999999)))
@@ -21,6 +25,7 @@ class RoommateSystem:
         student_id = self.generateId()
         student = Student(student_id, name, email, password, hometown)
         self.students.append(student)
+        return student
 
     def removeStudent(self, id):
         for student in self.students:
@@ -42,18 +47,39 @@ class RoommateSystem:
                 return student
         return None
     
+    def viewStudents(self):
+        return self.students
+    
     def gerenateGroupId(self):
-        newGroupId = randint(1,10)
+        newGroupId = randint(1,50)
         existing_ids = [s.groupID for s in self.students]
         while newGroupId in existing_ids:
-            newGroupId = randint(1,10)
+            newGroupId = randint(1,50)
         
         return newGroupId
 
-    def finalizePairing(self, id1, id2):
-        student1 = self.getStudentById(id1)
-        student2 = self.getStudentById(id2)
 
-        groupId = self.gerenateGroupId()
-        student1.groupID = groupId
-        student2.groupID = groupId  
+    def updateRequestList(self):
+        for request in self.requests:
+            if request.isAccepted() == True:
+                senderID = request.getSenderId()
+                group = []
+                group.append(senderID)
+                group.extend(request.getReceiverIds())     
+                
+                new_pairing = pairing(self.generateGroupId(), group)
+                self.pairings.append(new_pairing)
+                self.requests.remove(request)
+
+            if request.isAccepted() == False:
+                    self.requests.remove(request)
+
+    def finalize_pairing(self):
+        for student in self.students:
+            for pairing in self.pairings:
+                if student.id in pairing.students:
+                    student.groupID = pairing.group_id
+                self.pairings.remove(pairing)
+
+    def removeAllPairings(self):
+        self.pairings = []
