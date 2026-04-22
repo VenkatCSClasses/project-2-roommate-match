@@ -1,5 +1,8 @@
 import unittest
 from src.system import RoommateSystem
+from src.roommateRequest import roommateRequest
+from src.pairing import pairing
+
 
 class TestRoommateSystem(unittest.TestCase):
 
@@ -13,32 +16,100 @@ class TestRoommateSystem(unittest.TestCase):
     def test_remove_student(self):
         self.system.addStudent("Julia", "j@test.com", "123", "NY")
         student = self.system.getStudentByName("Julia")
-        self.system.removeStudent(student.id)
+        studentID = student[0].id
+        self.system.removeStudent(student[0].id)
         self.assertEqual(len(self.system.students), 0)
+        self.assertEqual(self.system.removeStudent(705000000), "There is no student with id: 705000000")
+        self.assertEqual(self.system.removeStudent(studentID), "There is no student with id: " + str(studentID))
+        
 
     def test_get_student_by_name(self):
         self.system.addStudent("Julia", "j@test.com", "123", "NY")
+        self.system.addStudent("Julia", "julia@test.com", "123", "CA")
+        self.system.addStudent("Bob", "Bob@test.com", "123", "CA")
         student = self.system.getStudentByName("Julia")
+        student = self.system.getStudentByName("Bob")
         self.assertEqual(len(student), 1)
+        student = self.system.getStudentByName("Julia D")
+        self.assertEqual(len(student), 0)
 
     def test_get_student_by_id(self):
         self.system.addStudent("Julia", "j@test.com", "123", "NY")
         student1 = self.system.students[0]
         foundById1 = self.system.getStudentById(student1.id)
         self.assertEqual(foundById1, student1)
+        self.assertEqual(self.system.getStudentById(705000000), None)
+
+    def test_update_request_list_accepted(self):
+        self.system.addStudent("Julia", "j@test.com", "123", "NY")
+        self.system.addStudent("April", "April@test.com", "123", "CA")
+        self.system.addStudent("Bob", "Bob@test.com", "123", "CA")
+
+        student1 = self.system.getStudentByName("Julia")
+        stu1ID = student1[0].id
+        student2 = self.system.getStudentByName("April")
+        stu2ID = student2[0].id
+        student3 = self.system.getStudentByName("Bob")
+        stu3ID = student3[0].id
+
+        student1.sendRequest(stu2ID, stu3ID)
+        self.system.requests[0].accept_request(stu2ID) #all receivers accept
+        self.system.requests[0].accept_request(stu3ID)
+        self.system.requests[0].updateStatus()  #sets accepted = True
+        
+        self.assertEqual(len(self.system.requests), 1)
+        self.system.updateRequestList()
+        self.assertEqual(len(self.system.requests), 0)
+
+        self.system.finalize_pairing()
+        self.assertEqual(len(self.system.pairings), 1)
+
+    def test_update_request_list_rejected(self):
+        self.system.addStudent("Julia", "j@test.com", "123", "NY")
+        self.system.addStudent("April", "April@test.com", "123", "CA")
+        self.system.addStudent("Bob", "Bob@test.com", "123", "CA")
+
+        student1 = self.system.getStudentByName("Julia")
+        stu1ID = student1[0].id
+        student2 = self.system.getStudentByName("April")
+        stu2ID = student2[0].id
+        student3 = self.system.getStudentByName("Bob")
+        stu3ID = student3[0].id
+
+        student1.sendRequest(stu2ID, stu3ID)
+        self.system.requests[0].reject_request(stu2ID) #reject
+        self.system.requests[0].reject_request(stu3ID) #reject
+        self.system.requests[0].updateStatus()
+
+        self.assertEqual(len(self.system.requests), 1)
+        self.system.updateRequestList()
+        self.assertEqual(len(self.system.requests), 0)
+
+        self.system.finalize_pairing()
+        self.assertEqual(len(self.system.pairings), 1)
+        
 
     def test_finalize_pairing(self):
-        self.system.addStudent("April", "a@test.com", "123", "NY")
-        self.system.addStudent("Bob", "b@test.com", "123", "CA")
-        
-        aprilStudents = self.system.getStudentByName("April")
-        s1 = aprilStudents[0]
-        
-        bobStudents = self.system.getStudentByName("Bob")
-        s2 = bobStudents[0]
-        
-        self.system.finalizePairing(s1.id, s2.id)
-        self.assertEqual(s1.groupID, s2.groupID)
+        self.system.addStudent("Julia", "j@gmail.com", "123", "Ithaca") #adds students
+        self.system.addStudent("Bob", "bob@gmail.com", "123", "Liverpool")
+        self.system.addStudent("April", "april@gmail.com", "123", "Liverpool")
+        self.system.addStudent("Dylan", "dylan@gmail.com", "123", "Liverpool")
+        student1 = self.system.students[0] 
+        student2 = self.system.students[1]
+        student3 = self.system.students[2]
+        student4 = self.system.students[3]
+        self.assertEqual(student1.groupID, -1) #check they are both not assigned to a group
+        self.assertEqual(student2.groupID, -1)
+        self.system.pairings.append(pairing(1, [student1.id, student2.id])) #create a pairing
+        self.assertEqual(len(self.system.pairings), 1) #check pairing was created
+        self.system.finalize_pairing()
+        self.assertEqual(len(self.system.pairings), 0) #check pairing was removed
+        self.assertEqual(student1.groupID, 1) #check students are in the right group
+        self.assertEqual(student2.groupID, 1)
+
+        self.assertNotEqual(student3.groupID, 1)
+        self.assertNotEqual(student4.groupID, 1)
+        self.assertNotEqual(student1.groupID, student3.groupID)
         
 
 if __name__ == "__main__":
