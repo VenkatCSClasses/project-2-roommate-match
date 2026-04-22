@@ -32,25 +32,39 @@ class StudentTest(unittest.TestCase):
 
     def test_respondRequest(self):
         system = RoommateSystem()
-        sender = system.addStudent("Alice", "alice@test.com", "123", "NY")
-        recipient = system.addStudent("Bob", "bob@test.com", "123", "CA")
 
-        sender.sendRequest(recipient.id, system)
+        s1 = Student(1, "A", "a@x.com", "pw", "Town")
+        s2 = Student(2, "B", "b@x.com", "pw", "Town")
+        s3 = Student(3, "C", "c@x.com", "pw", "Town")
 
-        # Accepts request
-        req_id = recipient.requests[0]["request_id"]
-        recipient.respondRequest(req_id, system, accept=True)
-        self.assertEqual(recipient.requests[0]["status"], "accepted")
+        system.students = [s1, s2, s3]
 
-        # Denies request
-        sender.sendRequest(recipient.id, system)
-        req_id2 = recipient.requests[1]["request_id"]
-        recipient.respondRequest(req_id2, system, accept=False)
-        self.assertEqual(recipient.requests[1]["status"], "denied")
+        s1.sendRequest([2, 3], system)
+        req = system.requests[0]
 
-        # Invalid request
-        with self.assertRaises(ValueError):
-            recipient.respondRequest(9999, system, accept=True)
+        # s2 accepts
+        s2.respondRequest(req.request_id, True, system)
+        self.assertEqual(req.responses[2], True)
+
+        # s3 rejects, entire request should be cancelled
+        s3.respondRequest(req.request_id, False, system)
+
+        # Request list should now be empty
+        self.assertEqual(len(system.requests), 0)
+
+        self.assertEqual(len(system.pairings), 0)
+
+
+        # Testing all accept
+        s1.sendRequest([2, 3], system)
+        req = system.requests[0]
+
+        s2.respondRequest(req.request_id, True, system)
+        s3.respondRequest(req.request_id, True, system)
+
+        # Request should be removed and moved to pairings
+        self.assertEqual(len(system.requests), 0)
+        self.assertEqual(len(system.pairings), 1)
 
     
     def test_updatePassword(self):
