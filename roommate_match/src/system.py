@@ -10,6 +10,7 @@ class RoommateSystem:
         self.interest_options = []
         self.pairings = []
         self.requests = []
+        self.next_group_id = 1
 
     def generateId(self):
         newId = int("705" + str(randint(100000, 999999)))

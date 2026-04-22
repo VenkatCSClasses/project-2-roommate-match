@@ -1,3 +1,4 @@
+from platform import system
 import sqlite3
 
 from roommate_match.src.roommateRequest import roommateRequest
@@ -12,6 +13,8 @@ class Student:
         self.interests = []
         self.preferences = []
         self.requests = []
+        self.requestsReceived = []
+        self.requestsSent = []
         self.groupID = -1  # No group assigned
 
     #Get methods
@@ -43,40 +46,43 @@ class Student:
 
 
     def sendRequest(self, receiver_ids, system):
-        #Send a roommate request to another student using their student ID only
+        # Sender cannot send more than 1 request
+        for req in self.requestsSent:
+            if req.accepted is None:
+                raise Exception("Sender already has a pending request")
+
+        # Receivers cannot be in another group
+        for rid in receiver_ids:
+            receiver = system.getStudentById(rid)
+            if receiver.groupID != -1:
+                raise Exception("Receiver already in a group")
+
+
+        if len(receiver_ids) == 0 or len(receiver_ids) > 3:
+            raise Exception("Invalid number of receivers")
         
-        if self.groupID != -1:
-            raise Exception("You are already in a group.")
 
-        for req in system.requests:
-            if req.sender_id == self.studentID:
-                raise Exception("You already have a active request.")
+        if len(receiver_ids) == 1:
+            new_request = roommateRequest(self.id, receiver_ids[0])
+        elif len(receiver_ids) == 2:
+            new_request = roommateRequest(self.id, receiver_ids[0], receiver_ids[1])
+        elif len(receiver_ids) == 3:
+            new_request = roommateRequest(self.id, receiver_ids[0], receiver_ids[1], receiver_ids[2])
+        else:
+            raise ValueError("sendRequest supports up to 3 receivers")
 
-        if len(receiver_ids) < 1 or len(receiver_ids) > 3:
-            raise Exception("You must invite between 1 and 3 students.")
+        system.requests.append(new_request)
+
 
         for rid in receiver_ids:
-            receiver = system.getStudentByID(rid)
+            receiver = system.getStudentById(rid)
+            receiver.requestsReceived.append(new_request)
 
-            if receiver is None:
-                raise Exception(f"Student {rid} does not exist.")
+        self.requestsSent.append(new_request)
 
-            if receiver.groupID != -1:
-                raise Exception(f"Student {rid} is already in a group.")
-
-            for req in system.requests:
-                if rid in req.receiver_ids:
-                    raise Exception(f"Student {rid} already has a pending request.")
-
-            new_request = roommateRequest(self.studentID, receiver_ids)
-
-            system.requests.append(new_request)
-
-    
 
     def respondRequest(self, request_id, accept, system):
-        #Respond to a roommate request from another student with "accept" or "reject"
-        
+        # Get request object from the system
         req = None
         for r in system.requests:
             if r.request_id == request_id:
@@ -84,18 +90,45 @@ class Student:
                 break
 
         if req is None:
-            raise Exception("Request not found.")
+            raise Exception("Request not found")
 
-        req.responses[self.studentID] = accept
+        # See if current student is a receiver
+        if self.id not in req.receiver_ids:
+            raise Exception("Student not a receiver of this request")
 
-        if False in req.responses.values():
+        # Response of the student is recorded
+        req.responses[self.id] = accept
+
+        # Check if all receivers responded
+        if all(req.responses[rid] is not None for rid in req.receiver_ids):
+
+            # Remove request if any said no
+            if any(req.responses[rid] is False for rid in req.receiver_ids):
+                req.accepted = False
+                system.requests.remove(req)
+                return
+
+            # Accept if everyone accepted request
+            req.accepted = True
+
+            # Assigns group ID
+            new_group_id = system.next_group_id
+            system.next_group_id += 1
+
+            system.getStudentById(req.sender_id).groupID = new_group_id
+            for rid in req.receiver_ids:
+                system.getStudentById(rid).groupID = new_group_id
+
+            pair = {
+                "group_id": new_group_id,
+                "members": [req.sender_id] + req.receiver_ids
+            }
+            system.pairings.append(pair)
+
+            #remove request as it is in pairing now
             system.requests.remove(req)
-            return
 
-        if all(v is True for v in req.responses.values()):
-            system.updateRequestList(req)
-            system.requests.remove(req)
-            
+
 
     def updatePassword(self, new_password: str):
         #Update the student's password
