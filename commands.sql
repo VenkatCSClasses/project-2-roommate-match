@@ -56,3 +56,5 @@ ADD group_id INT
 REFERENCES groups(id);
 
 DROP TABLE students_to_groups;
+
+update admins set name = 'Admin', email = 'admin@campus.edu' where admins.id = 101; 
