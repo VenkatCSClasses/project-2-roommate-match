@@ -5,6 +5,7 @@ class roommateRequest:
         self.receiver_ids = [r_id for r_id in [receiver1_id, receiver2_id, receiver3_id] if r_id is not None]
         self.responses = {r_id: None for r_id in self.receiver_ids}
         self.accepted = None
+        self.request_id = id(self)
 
     def accept_request(self, r_id):
         self.responses[r_id] = True

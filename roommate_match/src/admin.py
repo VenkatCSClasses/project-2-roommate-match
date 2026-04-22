@@ -30,9 +30,11 @@ class Admin:
             print("Student " + id + " not found")
         return student
             
-    def finalizePairing(self, id1, id2):
-        #puts both students in the same group and adds the group to the matches list
-        self.system.finalizePairing(id1, id2)
+    def approveAllPairings(self):
+        self.system.finalize_pairing()
+
+    def removeAllPairings(self):
+        self.system.removeAllPairings()
 
     def addPreferenceOption(self, preference):
         self.system.preference_options.append(preference)
