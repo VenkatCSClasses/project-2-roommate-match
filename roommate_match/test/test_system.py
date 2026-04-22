@@ -90,18 +90,21 @@ class TestRoommateSystem(unittest.TestCase):
         
 
     def test_finalize_pairing(self):
-        self.system.addStudent("Julia", "j@gmail.com", "123", "Ithaca")
+        self.system.addStudent("Julia", "j@gmail.com", "123", "Ithaca") #adds students
         self.system.addStudent("Bob", "bob@gmail.com", "123", "Liverpool")
         self.system.addStudent("April", "april@gmail.com", "123", "Liverpool")
         self.system.addStudent("Dylan", "dylan@gmail.com", "123", "Liverpool")
-        student1 = self.system.students[0]
+        student1 = self.system.students[0] 
         student2 = self.system.students[1]
         student3 = self.system.students[2]
         student4 = self.system.students[3]
-        self.assertEqual(student1.groupID, student2.groupID)
-        self.system.pairings.append(pairing(1, [student1.id, student2.id]))
+        self.assertEqual(student1.groupID, -1) #check they are both not assigned to a group
+        self.assertEqual(student2.groupID, -1)
+        self.system.pairings.append(pairing(1, [student1.id, student2.id])) #create a pairing
+        self.assertEqual(len(self.system.pairings), 1) #check pairing was created
         self.system.finalize_pairing()
-        self.assertEqual(student1.groupID, 1)
+        self.assertEqual(len(self.system.pairings), 0) #check pairing was removed
+        self.assertEqual(student1.groupID, 1) #check students are in the right group
         self.assertEqual(student2.groupID, 1)
 
         self.assertNotEqual(student3.groupID, 1)

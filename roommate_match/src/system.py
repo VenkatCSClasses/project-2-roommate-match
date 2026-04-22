@@ -63,7 +63,6 @@ class RoommateSystem:
                 group.extend(request.getReceiverIds())     
                 
                 new_pairing = pairing(self.generateGroupId(), group)
-                new_pairing.finalize_pairing(self)   
                 self.pairings.append(new_pairing)
                 self.requests.remove(request)
 
@@ -75,3 +74,7 @@ class RoommateSystem:
             for pairing in self.pairings:
                 if student.id in pairing.students:
                     student.groupID = pairing.group_id
+                self.pairings.remove(pairing)
+
+    def removeAllPairings(self):
+        self.pairings = []
