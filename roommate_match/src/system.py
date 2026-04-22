@@ -10,6 +10,7 @@ class RoommateSystem:
         self.interest_options = []
         self.pairings = []
         self.requests = []
+        self.next_group_id = 1
 
     def generateId(self):
         newId = int("705" + str(randint(100000, 999999)))
@@ -24,6 +25,7 @@ class RoommateSystem:
         student_id = self.generateId()
         student = Student(student_id, name, email, password, hometown)
         self.students.append(student)
+        return student
 
     def removeStudent(self, id):
         for student in self.students:
@@ -45,7 +47,14 @@ class RoommateSystem:
                 return student
         return None
     
+<<<<<<< HEAD
+    def viewStudents(self):
+        return self.students
+    
+    def gerenateGroupId(self):
+=======
     def generateGroupId(self):
+>>>>>>> 8396e8162d8f6ae6488e2aa5c0f381643678888d
         newGroupId = randint(1,50)
         existing_ids = [s.groupID for s in self.students]
         while newGroupId in existing_ids:
