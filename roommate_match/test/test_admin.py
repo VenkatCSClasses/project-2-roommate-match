@@ -42,15 +42,6 @@ class TestAdmin(unittest.TestCase):
         studentFound = self.admin.getStudentById(student.id)
         self.assertEqual(studentFound, student)
 
-    def test_finalize_pairing(self):
-        self.admin.addStudent("Julia", "j@gmail.com", "123", "Ithaca")
-        self.admin.addStudent("Bob", "bob@gmail.com", "123", "Liverpool")
-        student1 = self.system.students[0]
-        student2 = self.system.students[1]
-        self.admin.finalizePairing(student1.id, student2.id)
-        self.assertEqual(student1.groupID, student2.groupID)
-        #self.assertEqual(len(self.system.matches), 1)
-
     def test_add_preference_option(self):
         self.admin.addPreferenceOption("Clean")
         self.assertIn("Clean", self.system.preference_options)

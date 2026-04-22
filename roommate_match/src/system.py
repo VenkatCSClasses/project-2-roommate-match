@@ -47,10 +47,14 @@ class RoommateSystem:
                 return student
         return None
     
+<<<<<<< HEAD
     def viewStudents(self):
         return self.students
     
     def gerenateGroupId(self):
+=======
+    def generateGroupId(self):
+>>>>>>> 8396e8162d8f6ae6488e2aa5c0f381643678888d
         newGroupId = randint(1,50)
         existing_ids = [s.groupID for s in self.students]
         while newGroupId in existing_ids:
@@ -59,13 +63,27 @@ class RoommateSystem:
         return newGroupId
 
 
-    def updateRequestList(self, request):
-        if roommateRequest.isAccepted() == True:
-            senderID = request.getSenderId()
-            group = []
-            group.append(senderID)
-            group.extend(request.getReceiverIds())     
-            self.pairings.append(pairing(self.generateGroupId(), group))
-                                 
-        if roommateRequest.isAccepted() == False:
-            self.remove(self.requests)
+    def updateRequestList(self):
+        for request in self.requests:
+            if request.isAccepted() == True:
+                senderID = request.getSenderId()
+                group = []
+                group.append(senderID)
+                group.extend(request.getReceiverIds())     
+                
+                new_pairing = pairing(self.generateGroupId(), group)
+                self.pairings.append(new_pairing)
+                self.requests.remove(request)
+
+            if request.isAccepted() == False:
+                    self.requests.remove(request)
+
+    def finalize_pairing(self):
+        for student in self.students:
+            for pairing in self.pairings:
+                if student.id in pairing.students:
+                    student.groupID = pairing.group_id
+                self.pairings.remove(pairing)
+
+    def removeAllPairings(self):
+        self.pairings = []
