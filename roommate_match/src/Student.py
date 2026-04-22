@@ -74,9 +74,28 @@ class Student:
 
     
 
-    def respondRequest(self, other_student, response: str):
+    def respondRequest(self, request_id, accept, system):
         #Respond to a roommate request from another student with "accept" or "reject"
-        pass
+        
+        req = None
+        for r in system.requests:
+            if r.request_id == request_id:
+                req = r
+                break
+
+        if req is None:
+            raise Exception("Request not found.")
+
+        req.responses[self.studentID] = accept
+
+        if False in req.responses.values():
+            system.requests.remove(req)
+            return
+
+        if all(v is True for v in req.responses.values()):
+            system.updateRequestList(req)
+            system.requests.remove(req)
+            
 
     def updatePassword(self, new_password: str):
         #Update the student's password
