@@ -6,6 +6,7 @@ from .pairing import pairing
 class RoommateSystem:
     def __init__(self):
         self.students = []
+        self.admins = []
         self.preference_options = []
         self.interest_options = []
         self.pairings = []

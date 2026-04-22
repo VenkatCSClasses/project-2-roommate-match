@@ -4,6 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from .admin import Admin
 from .Student import Student
 from .pairing import pairing
 from .roommateRequest import roommateRequest
@@ -30,6 +31,7 @@ def connect_database(database_path: str | Path | None = None) -> sqlite3.Connect
 def create_system_from_database(connection: sqlite3.Connection) -> RoommateSystem:
 	system = RoommateSystem()
 	_populate_students(connection, system)
+	_populate_admins(connection, system)
 	_populate_roommate_requests(connection, system)
 	_populate_interest_options(connection, system)
 	_populate_preference_options(connection, system)
@@ -197,6 +199,49 @@ def persist_pending_interest_updates(connection: sqlite3.Connection) -> int:
 	connection.commit()
 	pending_interest_updates.clear()
 	return written_students
+
+
+def persist_students(connection: sqlite3.Connection, system: RoommateSystem) -> int:
+	if not _table_exists(connection, "students"):
+		return 0
+
+	student_columns = _table_columns(connection, "students")
+	has_group_id = "group_id" in student_columns
+
+	connection.execute("DELETE FROM students")
+	for student in system.students:
+		if has_group_id:
+			connection.execute(
+				"""
+				INSERT INTO students (id, name, email, password, hometown, group_id)
+				VALUES (?, ?, ?, ?, ?, ?)
+				""",
+				(
+					int(student.id),
+					str(student.name),
+					str(student.email),
+					str(student.password),
+					str(student.hometown),
+					int(student.groupID) if int(student.groupID) >= 0 else None,
+				),
+			)
+		else:
+			connection.execute(
+				"""
+				INSERT INTO students (id, name, email, password, hometown)
+				VALUES (?, ?, ?, ?, ?)
+				""",
+				(
+					int(student.id),
+					str(student.name),
+					str(student.email),
+					str(student.password),
+					str(student.hometown),
+				),
+			)
+
+	connection.commit()
+	return len(system.students)
 
 
 def get_interest_options(connection: sqlite3.Connection) -> list[tuple[int, str]]:
@@ -582,6 +627,29 @@ def _populate_students(connection: sqlite3.Connection, system: RoommateSystem) -
 		student.interests = _get_student_interest_titles(connection, student_id)
 		student.preferences = _get_student_preferences(connection, student_id)
 		system.students.append(student)
+
+
+def _populate_admins(connection: sqlite3.Connection, system: RoommateSystem) -> None:
+	if not _table_exists(connection, "admins"):
+		return
+
+	rows = connection.execute(
+		"SELECT id, name, email, password FROM admins"
+	).fetchall()
+
+	system.admins = []
+	for row in rows:
+		if _looks_like_admin_header_row(row):
+			continue
+		system.admins.append(
+			Admin(int(row[0]), str(row[1]), str(row[2]), str(row[3]), system)
+		)
+
+
+def _looks_like_admin_header_row(row: tuple[Any, ...]) -> bool:
+	id_value = str(row[0]).strip().lower()
+	name_value = str(row[1]).strip().lower()
+	return id_value in {"id", "admin_id"} or name_value in {"name", "admin_name"}
 
 
 def _looks_like_header_row(row: tuple[Any, ...]) -> bool:

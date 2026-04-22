@@ -13,9 +13,11 @@ from .databaseHelper import (
 	get_outgoing_roommate_requests,
 	persist_pending_interest_updates,
 	persist_pending_roommate_requests,
+	persist_students,
 	remove_interest_from_student,
 	respond_to_roommate_request,
 )
+from .admin import Admin
 from .roommateRequest import roommateRequest
 from .system import RoommateSystem
 
@@ -26,6 +28,7 @@ class LoginApp(App):
 	db_connection = None
 	system: RoommateSystem | None = None
 	current_student = None
+	current_admin: Admin | None = None
 	current_admin_name: str | None = None
 	db_connection_error: bool = False
 	student_rows: list[tuple[str, str, str]] = []
@@ -58,6 +61,13 @@ class LoginApp(App):
 	}
 
 	#admin-menu {
+		width: 100%;
+		padding: 2 3;
+		border: round $accent;
+		background: $panel;
+	}
+
+	#admin-create-student-menu {
 		width: 100%;
 		padding: 2 3;
 		border: round $accent;
@@ -143,6 +153,21 @@ class LoginApp(App):
 			yield Button("Logout", id="admin-logout-button", variant="default")
 			yield Button("Save and Exit", id="admin-save-exit-button", variant="error")
 			yield Label("", id="admin-menu-status")
+
+		with Container(id="admin-create-student-menu", classes="hidden"):
+			yield Label("Create Student", id="title")
+			yield Label("", id="admin-create-student-welcome")
+			yield Label("First Name", id="admin-create-first-name-label")
+			yield Input(placeholder="Enter first name", id="admin-create-first-name")
+			yield Label("Last Name", id="admin-create-last-name-label")
+			yield Input(placeholder="Enter last name", id="admin-create-last-name")
+			yield Label("Hometown", id="admin-create-hometown-label")
+			yield Input(placeholder="Enter hometown", id="admin-create-hometown")
+			yield Label("Email", id="admin-create-email-label")
+			yield Input(placeholder="Enter email", id="admin-create-email")
+			yield Button("Submit Student", id="admin-create-student-submit-button", variant="primary")
+			yield Button("Cancel", id="admin-create-student-cancel-button", variant="default")
+			yield Label("", id="admin-create-student-status")
 		yield Footer()
 
 	def on_mount(self) -> None:
@@ -163,6 +188,7 @@ class LoginApp(App):
 			persist_pending_interest_updates(self.db_connection)
 			if self.system is not None:
 				persist_pending_roommate_requests(self.db_connection, self.system)
+				persist_students(self.db_connection, self.system)
 			self.db_connection.close()
 
 	def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -193,7 +219,12 @@ class LoginApp(App):
 		elif event.button.id == "reject-request-button":
 			self._respond_to_selected_request(False)
 		elif event.button.id == "admin-create-student-button":
-			self.query_one("#admin-menu-status", Label).update("Create Student coming soon.")
+			self._admin_create_student()
+		elif event.button.id == "admin-create-student-submit-button":
+			self._admin_submit_create_student()
+		elif event.button.id == "admin-create-student-cancel-button":
+			self._show_admin_menu(self.current_admin_name or "Admin")
+			self.query_one("#admin-menu-status", Label).update("Create Student canceled.")
 		elif event.button.id == "admin-finalize-pairing-button":
 			self.query_one("#admin-menu-status", Label).update("Finalize Pairing coming soon.")
 		elif event.button.id == "admin-logout-button":
@@ -252,21 +283,23 @@ class LoginApp(App):
 		student = self._authenticate_student(email, password)
 		if student is not None:
 			self.current_student = student
+			self.current_admin = None
 			self.current_admin_name = None
 			self.group_members = []
 			status.update(f"Signed in as {student.name}.")
 			self._show_student_menu(student.name)
 			return
 
-		admin_name = self._authenticate_admin(email, password)
-		if admin_name is None:
+		admin = self._authenticate_admin(email, password)
+		if admin is None:
 			status.update("Invalid email or password.")
 			return
 
 		self.current_student = None
-		self.current_admin_name = admin_name
-		status.update(f"Signed in as admin {admin_name}.")
-		self._show_admin_menu(admin_name)
+		self.current_admin = admin
+		self.current_admin_name = str(admin.name)
+		status.update(f"Signed in as admin {admin.name}.")
+		self._show_admin_menu(str(admin.name))
 
 	def _show_student_menu(self, email: str) -> None:
 		login_panel = self.query_one("#login-panel", Container)
@@ -283,11 +316,13 @@ class LoginApp(App):
 		login_panel = self.query_one("#login-panel", Container)
 		student_menu = self.query_one("#student-menu", Container)
 		admin_menu = self.query_one("#admin-menu", Container)
+		admin_create_student_menu = self.query_one("#admin-create-student-menu", Container)
 		welcome = self.query_one("#admin-menu-welcome", Label)
 		admin_status = self.query_one("#admin-menu-status", Label)
 
 		welcome.update(f"Welcome, {admin_name}")
 		admin_status.update("")
+		admin_create_student_menu.add_class("hidden")
 		student_menu.add_class("hidden")
 		login_panel.add_class("hidden")
 		admin_menu.remove_class("hidden")
@@ -301,21 +336,65 @@ class LoginApp(App):
 				return student
 		return None
 
-	def _authenticate_admin(self, email: str, password: str) -> str | None:
-		if self.db_connection is None:
+	def _authenticate_admin(self, email: str, password: str) -> Admin | None:
+		if self.system is None:
 			return None
 
-		try:
-			row = self.db_connection.execute(
-				"SELECT name FROM admins WHERE email = ? AND password = ? LIMIT 1",
-				(email, password),
-			).fetchone()
-		except Exception:
-			return None
+		for admin in self.system.admins:
+			if str(admin.email) == email and str(admin.password) == password:
+				return admin
+		return None
 
-		if row is None:
-			return None
-		return str(row[0])
+	def _admin_create_student(self) -> None:
+		status = self.query_one("#admin-create-student-status", Label)
+		if self.current_admin is None or self.system is None:
+			status.update("No admin account is currently active.")
+			return
+
+		admin_menu = self.query_one("#admin-menu", Container)
+		admin_create_student_menu = self.query_one("#admin-create-student-menu", Container)
+		admin_create_student_welcome = self.query_one("#admin-create-student-welcome", Label)
+		admin_create_student_welcome.update(f"Welcome, {self.current_admin_name or 'Admin'}")
+		admin_menu.add_class("hidden")
+		admin_create_student_menu.remove_class("hidden")
+		self.query_one("#admin-create-first-name", Input).focus()
+		status.update("Enter first name, last name, hometown, and email.")
+
+	def _admin_submit_create_student(self) -> None:
+		status = self.query_one("#admin-create-student-status", Label)
+		if self.current_admin is None or self.system is None:
+			status.update("No admin account is currently active.")
+			return
+
+		first_name = self.query_one("#admin-create-first-name", Input).value.strip()
+		last_name = self.query_one("#admin-create-last-name", Input).value.strip()
+		hometown = self.query_one("#admin-create-hometown", Input).value.strip()
+		email = self.query_one("#admin-create-email", Input).value.strip().lower()
+
+		if not first_name or not last_name or not hometown or not email:
+			status.update("Please fill in first name, last name, hometown, and email.")
+			return
+
+		email_exists = any(str(student.email).strip().lower() == email for student in self.system.students)
+		if email_exists:
+			status.update("A student with that email already exists.")
+			return
+
+		new_name = f"{first_name} {last_name}".strip()
+		new_password = "changeme"
+		self.current_admin.addStudent(new_name, email, new_password, hometown)
+		created_student = self.system.students[-1] if self.system.students else None
+		if created_student is None:
+			status.update("Could not create student.")
+			return
+
+		self.query_one("#admin-create-first-name", Input).value = ""
+		self.query_one("#admin-create-last-name", Input).value = ""
+		self.query_one("#admin-create-hometown", Input).value = ""
+		self.query_one("#admin-create-email", Input).value = ""
+		status.update(
+			f"Created student {created_student.name} ({created_student.email}). Save and Exit to persist."
+		)
 
 	def _fetch_students_with_interests(self) -> list[tuple[str, str, str]]:
 		if self.system is None:
@@ -945,9 +1024,11 @@ class LoginApp(App):
 			persist_pending_interest_updates(self.db_connection)
 			if self.system is not None:
 				persist_pending_roommate_requests(self.db_connection, self.system)
+				persist_students(self.db_connection, self.system)
 
 		self._return_to_menu()
 		self.current_student = None
+		self.current_admin = None
 		self.current_admin_name = None
 		self.group_members = []
 		self.student_rows = []
@@ -968,6 +1049,7 @@ class LoginApp(App):
 			persist_pending_interest_updates(self.db_connection)
 			if self.system is not None:
 				persist_pending_roommate_requests(self.db_connection, self.system)
+				persist_students(self.db_connection, self.system)
 		self.exit()
 
 
