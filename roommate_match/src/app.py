@@ -2,6 +2,7 @@
 
 from textual.app import App, ComposeResult
 from textual.containers import Container
+from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label
 
 from .databaseHelper import (
@@ -22,6 +23,44 @@ from .roommateRequest import roommateRequest
 from .system import RoommateSystem
 
 
+class ConfirmActionModal(ModalScreen[bool]):
+	"""Simple yes/no modal confirmation dialog."""
+
+	CSS = """
+	ConfirmActionModal {
+		align: center middle;
+	}
+
+	#confirm-dialog {
+		width: 60;
+		padding: 1 2;
+		border: round $accent;
+		background: $panel;
+	}
+
+	#confirm-message {
+		margin-bottom: 1;
+		content-align: center middle;
+	}
+	"""
+
+	def __init__(self, message: str) -> None:
+		super().__init__()
+		self.message = message
+
+	def compose(self) -> ComposeResult:
+		with Container(id="confirm-dialog"):
+			yield Label(self.message, id="confirm-message")
+			yield Button("Yes", id="confirm-yes", variant="primary")
+			yield Button("No", id="confirm-no", variant="default")
+
+	def on_button_pressed(self, event: Button.Pressed) -> None:
+		if event.button.id == "confirm-yes":
+			self.dismiss(True)
+		elif event.button.id == "confirm-no":
+			self.dismiss(False)
+
+
 class LoginApp(App):
 	"""A simple login screen with email and password fields."""
 
@@ -30,6 +69,7 @@ class LoginApp(App):
 	current_student = None
 	current_admin: Admin | None = None
 	current_admin_name: str | None = None
+	pending_finalize_action: str | None = None
 	db_connection_error: bool = False
 	student_rows: list[tuple[str, str, str]] = []
 	selected_student_ids: list[int] = []
@@ -68,6 +108,13 @@ class LoginApp(App):
 	}
 
 	#admin-create-student-menu {
+		width: 100%;
+		padding: 2 3;
+		border: round $accent;
+		background: $panel;
+	}
+
+	#admin-finalize-pairing-menu {
 		width: 100%;
 		padding: 2 3;
 		border: round $accent;
@@ -174,6 +221,14 @@ class LoginApp(App):
 			yield Button("Submit Student", id="admin-create-student-submit-button", variant="primary")
 			yield Button("Cancel", id="admin-create-student-cancel-button", variant="default")
 			yield Label("", id="admin-create-student-status")
+
+		with Container(id="admin-finalize-pairing-menu", classes="hidden"):
+			yield Label("Finalize Pairings", id="title")
+			yield Label("", id="admin-finalize-pairing-welcome")
+			yield Button("Approve All", id="admin-approve-all-button", variant="primary")
+			yield Button("Reject All", id="admin-reject-all-button", variant="error")
+			yield Button("Return", id="admin-finalize-return-button", variant="default")
+			yield Label("", id="admin-finalize-pairing-status")
 		yield Footer()
 
 	def on_mount(self) -> None:
@@ -236,7 +291,14 @@ class LoginApp(App):
 			self._show_admin_menu(self.current_admin_name or "Admin")
 			self.query_one("#admin-menu-status", Label).update("Create Student canceled.")
 		elif event.button.id == "admin-finalize-pairing-button":
-			self.query_one("#admin-menu-status", Label).update("Finalize Pairing coming soon.")
+			self._admin_show_finalize_pairings_menu()
+		elif event.button.id == "admin-approve-all-button":
+			self._admin_prompt_finalize_confirmation("approve")
+		elif event.button.id == "admin-reject-all-button":
+			self._admin_prompt_finalize_confirmation("reject")
+		elif event.button.id == "admin-finalize-return-button":
+			self._show_admin_menu(self.current_admin_name or "Admin")
+			self.query_one("#admin-menu-status", Label).update("Finalize Pairings canceled.")
 		elif event.button.id == "admin-logout-button":
 			self._logout()
 		elif event.button.id == "admin-save-exit-button":
@@ -327,15 +389,60 @@ class LoginApp(App):
 		student_menu = self.query_one("#student-menu", Container)
 		admin_menu = self.query_one("#admin-menu", Container)
 		admin_create_student_menu = self.query_one("#admin-create-student-menu", Container)
+		admin_finalize_pairing_menu = self.query_one("#admin-finalize-pairing-menu", Container)
 		welcome = self.query_one("#admin-menu-welcome", Label)
 		admin_status = self.query_one("#admin-menu-status", Label)
 
 		welcome.update(f"Welcome, {admin_name}")
 		admin_status.update("")
+		self.pending_finalize_action = None
 		admin_create_student_menu.add_class("hidden")
+		admin_finalize_pairing_menu.add_class("hidden")
 		student_menu.add_class("hidden")
 		login_panel.add_class("hidden")
 		admin_menu.remove_class("hidden")
+
+	def _admin_show_finalize_pairings_menu(self) -> None:
+		if self.current_admin is None:
+			self.query_one("#admin-menu-status", Label).update("No admin account is currently active.")
+			return
+
+		admin_menu = self.query_one("#admin-menu", Container)
+		admin_finalize_pairing_menu = self.query_one("#admin-finalize-pairing-menu", Container)
+		welcome = self.query_one("#admin-finalize-pairing-welcome", Label)
+		status = self.query_one("#admin-finalize-pairing-status", Label)
+
+		welcome.update(f"Welcome, {self.current_admin_name or 'Admin'}")
+		status.update("Choose Approve All or Reject All.")
+		self.pending_finalize_action = None
+		admin_menu.add_class("hidden")
+		admin_finalize_pairing_menu.remove_class("hidden")
+
+	def _admin_prompt_finalize_confirmation(self, action: str) -> None:
+		status = self.query_one("#admin-finalize-pairing-status", Label)
+		self.pending_finalize_action = action
+		action_text = "approve all" if action == "approve" else "reject all"
+		status.update(f"You selected {action_text}.")
+		self.push_screen(
+			ConfirmActionModal("Are you sure?"),
+			self._admin_confirm_finalize_action,
+		)
+
+	def _admin_confirm_finalize_action(self, confirmed: bool) -> None:
+		status = self.query_one("#admin-finalize-pairing-status", Label)
+		if not confirmed:
+			self.pending_finalize_action = None
+			status.update("Action canceled.")
+			return
+
+		if self.pending_finalize_action == "approve":
+			status.update("Approved all pairings.")
+		elif self.pending_finalize_action == "reject":
+			status.update("Rejected all pairings.")
+		else:
+			status.update("No action selected.")
+
+		self.pending_finalize_action = None
 
 	def _authenticate_student(self, email: str, password: str):
 		if self.system is None:
@@ -1111,6 +1218,8 @@ class LoginApp(App):
 		login_panel = self.query_one("#login-panel", Container)
 		student_menu = self.query_one("#student-menu", Container)
 		admin_menu = self.query_one("#admin-menu", Container)
+		admin_create_student_menu = self.query_one("#admin-create-student-menu", Container)
+		admin_finalize_pairing_menu = self.query_one("#admin-finalize-pairing-menu", Container)
 		login_status = self.query_one("#status", Label)
 		welcome = self.query_one("#menu-welcome", Label)
 		email_input = self.query_one("#email", Input)
@@ -1126,6 +1235,7 @@ class LoginApp(App):
 		self.current_student = None
 		self.current_admin = None
 		self.current_admin_name = None
+		self.pending_finalize_action = None
 		self.group_members = []
 		self.student_rows = []
 		self.selected_student_ids = []
@@ -1134,6 +1244,8 @@ class LoginApp(App):
 		welcome.update("")
 		email_input.value = ""
 		password_input.value = ""
+		admin_create_student_menu.add_class("hidden")
+		admin_finalize_pairing_menu.add_class("hidden")
 		admin_menu.add_class("hidden")
 		student_menu.add_class("hidden")
 		login_panel.remove_class("hidden")
