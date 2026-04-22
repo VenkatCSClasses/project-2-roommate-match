@@ -1,5 +1,7 @@
 import sqlite3
 
+from roommate_match.src.roommateRequest import roommateRequest
+
 class Student:
     def __init__(self, id: int, name: str, email: str, password: str, hometown: str):
         self.id = id
@@ -40,9 +42,37 @@ class Student:
 
 
 
-    def sendRequest(self, recipient, system):
+    def sendRequest(self, receiver_ids, system):
         #Send a roommate request to another student using their student ID only
-        pass
+        
+        if self.groupID != -1:
+            raise Exception("You are already in a group.")
+
+        for req in system.requests:
+            if req.sender_id == self.studentID:
+                raise Exception("You already have a active request.")
+
+        if len(receiver_ids) < 1 or len(receiver_ids) > 3:
+            raise Exception("You must invite between 1 and 3 students.")
+
+        for rid in receiver_ids:
+            receiver = system.getStudentByID(rid)
+
+            if receiver is None:
+                raise Exception(f"Student {rid} does not exist.")
+
+            if receiver.groupID != -1:
+                raise Exception(f"Student {rid} is already in a group.")
+
+            for req in system.requests:
+                if rid in req.receiver_ids:
+                    raise Exception(f"Student {rid} already has a pending request.")
+
+            new_request = roommateRequest(self.studentID, receiver_ids)
+
+            system.requests.append(new_request)
+
+    
 
     def respondRequest(self, other_student, response: str):
         #Respond to a roommate request from another student with "accept" or "reject"

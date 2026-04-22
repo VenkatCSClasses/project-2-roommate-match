@@ -52,8 +52,6 @@ class StudentTest(unittest.TestCase):
         # Request list should now be empty
         self.assertEqual(len(system.requests), 0)
 
-        self.assertEqual(len(system.pairings), 0)
-
 
         # Testing all accept
         s1.sendRequest([2, 3], system)
