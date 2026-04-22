@@ -15,6 +15,7 @@ class roommateRequest:
         self.updateStatus()
 
     def updateStatus(self):
+        #checks if everyone has responded
         if all(response == True for response in self.responses.values()):
             self.accepted = True
         elif any(response == False for response in self.responses.values()):

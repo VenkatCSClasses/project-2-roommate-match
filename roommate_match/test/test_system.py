@@ -40,29 +40,53 @@ class TestRoommateSystem(unittest.TestCase):
         self.assertEqual(self.system.getStudentById(705000000), None)
 
     def test_update_request_list_accepted(self):
-        request = roommateRequest(1, 2, 3)
-        request.accept_request(2) #all receivers accept
-        request.accept_request(3)
-        request.updateStatus()  #sets accepted = True
-        
-        initial_len = len(self.system.pairings)
-        self.system.updateRequestList(request)
-        self.assertEqual(len(self.system.pairings), initial_len + 1)
+        self.system.addStudent("Julia", "j@test.com", "123", "NY")
+        self.system.addStudent("April", "April@test.com", "123", "CA")
+        self.system.addStudent("Bob", "Bob@test.com", "123", "CA")
 
-        new_pairing = self.system.pairings[-1]
-        self.assertIn(1, new_pairing.group_id)
-        self.assertIn(2, new_pairing.group_id)
-        self.assertIn(3, new_pairing.group_id)
+        student1 = self.system.getStudentByName("Julia")
+        stu1ID = student1[0].id
+        student2 = self.system.getStudentByName("April")
+        stu2ID = student2[0].id
+        student3 = self.system.getStudentByName("Bob")
+        stu3ID = student3[0].id
+
+        student1.sendRequest(stu2ID, stu3ID)
+        self.system.requests[0].accept_request(stu2ID) #all receivers accept
+        self.system.requests[0].accept_request(stu3ID)
+        self.system.requests[0].updateStatus()  #sets accepted = True
+        
+        self.assertEqual(len(self.system.requests), 1)
+        self.system.updateRequestList()
+        self.assertEqual(len(self.system.requests), 0)
+
+        self.system.finalize_pairing()
+        self.assertEqual(len(self.system.pairings), 1)
 
     def test_update_request_list_rejected(self):
-        request = roommateRequest(1, 2, 3)
-        request.reject_request(2) #reject
-        request.updateStatus()  #sets accepted = True
-        self.system.requests.append(request)
-        initial_len = len(self.system.requests)
-        self.system.updateRequestList(request)
+        self.system.addStudent("Julia", "j@test.com", "123", "NY")
+        self.system.addStudent("April", "April@test.com", "123", "CA")
+        self.system.addStudent("Bob", "Bob@test.com", "123", "CA")
 
-        self.assertEqual(len(self.system.requests), initial_len - 1)
+        student1 = self.system.getStudentByName("Julia")
+        stu1ID = student1[0].id
+        student2 = self.system.getStudentByName("April")
+        stu2ID = student2[0].id
+        student3 = self.system.getStudentByName("Bob")
+        stu3ID = student3[0].id
+
+        student1.sendRequest(stu2ID, stu3ID)
+        self.system.requests[0].reject_request(stu2ID) #reject
+        self.system.requests[0].reject_request(stu3ID) #reject
+        self.system.requests[0].updateStatus()
+
+        self.assertEqual(len(self.system.requests), 1)
+        self.system.updateRequestList()
+        self.assertEqual(len(self.system.requests), 0)
+
+        self.system.finalize_pairing()
+        self.assertEqual(len(self.system.pairings), 1)
+        
 
     def test_finalize_pairing(self):
         self.system.addStudent("Julia", "j@gmail.com", "123", "Ithaca")
