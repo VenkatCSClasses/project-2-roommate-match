@@ -67,7 +67,9 @@ class Student:
         
         self.hometown = new_hometown
 
+    
 
+    
     def updateInterests(self, db_path: str):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()

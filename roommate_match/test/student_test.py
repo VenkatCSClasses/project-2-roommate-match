@@ -9,13 +9,26 @@ class StudentTest(unittest.TestCase):
 
     def test_sendRequest(self):
         system = RoommateSystem()
-        sender = system.addStudent("Alice", "alice@test.com", "123", "NY")
-        recipient = system.addStudent("Bob", "bob@test.com", "123", "CA")
 
-        sender.sendRequest(recipient.id, system)
+        s1 = Student(1, "A", "a@x.com", "pw", "Town")
+        s2 = Student(2, "B", "b@x.com", "pw", "Town")
+        s3 = Student(3, "C", "c@x.com", "pw", "Town")
 
-        # Ensures there is 1 request in the list
-        self.assertEqual(len(recipient.requests), 1)
+        system.students = [s1, s2, s3]
+
+        s1.sendRequest([2, 3], system)
+
+        self.assertEqual(len(system.requests), 1)
+
+        req = system.requests[0]
+
+        # All responses start as None
+        for rid in req.receiver_ids:
+            self.assertIsNone(req.responses[rid])
+
+        # Sender cannot send a second request
+        with self.assertRaises(Exception):
+            s1.sendRequest([2], system)
 
     def test_respondRequest(self):
         system = RoommateSystem()
@@ -160,8 +173,6 @@ class StudentTest(unittest.TestCase):
         )
 
 
-
-
     def test_viewStudents(self):
         system = RoommateSystem()
         system.addStudent("Alice", "alice@test.com", "123", "NY")
@@ -222,9 +233,6 @@ class StudentTest(unittest.TestCase):
         self.assertEqual(ranked[0].id, 2)
         self.assertEqual(ranked[1].id, 3)
         self.assertEqual(ranked[2].id, 4)
-
-
-
 
 
 if __name__ == '__main__':
