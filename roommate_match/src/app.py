@@ -133,6 +133,12 @@ class LoginApp(App):
 			yield Button("View Group Status", id="make-group-button", variant="primary")
 			yield Button("Respond to Requests", id="view-requests-button", variant="primary")
 			yield Button("Change Interests", id="change-interests-button", variant="primary")
+			yield Button("Change Password", id="change-password-button", variant="primary")
+			yield Label("Current Password", id="change-password-current-label", classes="hidden")
+			yield Input(placeholder="Enter current password", password=True, id="change-password-current-input", classes="hidden")
+			yield Label("New Password", id="change-password-new-label", classes="hidden")
+			yield Input(placeholder="Enter new password", password=True, id="change-password-new-input", classes="hidden")
+			yield Button("Update Password", id="change-password-submit-button", variant="primary", classes="hidden")
 			yield Button("Logout", id="logout-button", variant="default")
 			yield Button("Save and Exit", id="save-exit-button", variant="error")
 			yield Button("Return", id="return-button", variant="default", classes="hidden")
@@ -208,6 +214,10 @@ class LoginApp(App):
 			self._show_roommate_requests_menu()
 		elif event.button.id == "change-interests-button":
 			self._show_change_interests_menu()
+		elif event.button.id == "change-password-button":
+			self._show_change_password_menu()
+		elif event.button.id == "change-password-submit-button":
+			self._submit_change_password()
 		elif event.button.id == "logout-button":
 			self._logout()
 		elif event.button.id == "save-exit-button":
@@ -381,8 +391,8 @@ class LoginApp(App):
 			return
 
 		new_name = f"{first_name} {last_name}".strip()
-		new_password = "changeme"
-		self.current_admin.addStudent(new_name, email, new_password, hometown)
+		new_password = "temp"
+		self.system.addStudent(new_name, email, new_password, hometown)
 		created_student = self.system.students[-1] if self.system.students else None
 		if created_student is None:
 			status.update("Could not create student.")
@@ -393,7 +403,8 @@ class LoginApp(App):
 		self.query_one("#admin-create-hometown", Input).value = ""
 		self.query_one("#admin-create-email", Input).value = ""
 		status.update(
-			f"Created student {created_student.name} ({created_student.email}). Save and Exit to persist."
+			f"Created student {created_student.name} ({created_student.email}). "
+			f"Temporary password: {new_password}. Student can change it later. Save and Exit to persist."
 		)
 
 	def _fetch_students_with_interests(self) -> list[tuple[str, str, str]]:
@@ -747,6 +758,7 @@ class LoginApp(App):
 			self.query_one("#make-group-button", Button),
 			self.query_one("#view-requests-button", Button),
 			self.query_one("#change-interests-button", Button),
+			self.query_one("#change-password-button", Button),
 			self.query_one("#logout-button", Button),
 			self.query_one("#save-exit-button", Button),
 		)
@@ -767,6 +779,11 @@ class LoginApp(App):
 		table = self.query_one("#students-table", DataTable)
 		requests_table = self.query_one("#requests-table", DataTable)
 		interests_table = self.query_one("#interests-table", DataTable)
+		current_password_label = self.query_one("#change-password-current-label", Label)
+		current_password_input = self.query_one("#change-password-current-input", Input)
+		new_password_label = self.query_one("#change-password-new-label", Label)
+		new_password_input = self.query_one("#change-password-new-input", Input)
+		change_password_submit = self.query_one("#change-password-submit-button", Button)
 		status = self.query_one("#menu-status", Label)
 		send_button = self.query_one("#send-request-button", Button)
 		accept_button = self.query_one("#accept-request-button", Button)
@@ -779,6 +796,13 @@ class LoginApp(App):
 		send_button.add_class("hidden")
 		accept_button.add_class("hidden")
 		reject_button.add_class("hidden")
+		current_password_label.add_class("hidden")
+		current_password_input.add_class("hidden")
+		new_password_label.add_class("hidden")
+		new_password_input.add_class("hidden")
+		change_password_submit.add_class("hidden")
+		current_password_input.value = ""
+		new_password_input.value = ""
 		group_details.add_class("hidden")
 		self.selected_student_id = None
 		self.selected_student_ids = []
@@ -965,6 +989,78 @@ class LoginApp(App):
 		result_text = "accepted" if accept else "rejected"
 		status.update(f"Request {self.selected_request_id} {result_text}.")
 		self._show_roommate_requests_menu()
+
+	def _show_change_password_menu(self) -> None:
+		status = self.query_one("#menu-status", Label)
+		students_table = self.query_one("#students-table", DataTable)
+		requests_table = self.query_one("#requests-table", DataTable)
+		interests_table = self.query_one("#interests-table", DataTable)
+		send_button = self.query_one("#send-request-button", Button)
+		accept_button = self.query_one("#accept-request-button", Button)
+		reject_button = self.query_one("#reject-request-button", Button)
+		group_details = self.query_one("#group-details", Label)
+		current_password_label = self.query_one("#change-password-current-label", Label)
+		current_password_input = self.query_one("#change-password-current-input", Input)
+		new_password_label = self.query_one("#change-password-new-label", Label)
+		new_password_input = self.query_one("#change-password-new-input", Input)
+		change_password_submit = self.query_one("#change-password-submit-button", Button)
+
+		if self.current_student is None:
+			status.update("No logged-in student found.")
+			return
+
+		students_table.add_class("hidden")
+		requests_table.add_class("hidden")
+		interests_table.add_class("hidden")
+		send_button.add_class("hidden")
+		accept_button.add_class("hidden")
+		reject_button.add_class("hidden")
+		group_details.add_class("hidden")
+		self.request_table_mode = None
+		self.selected_request_id = None
+		self._set_students_view_mode(True)
+
+		current_password_input.value = ""
+		new_password_input.value = ""
+		current_password_label.remove_class("hidden")
+		current_password_input.remove_class("hidden")
+		new_password_label.remove_class("hidden")
+		new_password_input.remove_class("hidden")
+		change_password_submit.remove_class("hidden")
+		status.update("Enter your current password and new password.")
+		current_password_input.focus()
+
+	def _submit_change_password(self) -> None:
+		status = self.query_one("#menu-status", Label)
+		current_password_input = self.query_one("#change-password-current-input", Input)
+		new_password_input = self.query_one("#change-password-new-input", Input)
+
+		if self.current_student is None:
+			status.update("No logged-in student found.")
+			return
+
+		current_password = current_password_input.value
+		new_password = new_password_input.value
+
+		if not current_password or not new_password:
+			status.update("Please enter both current and new password.")
+			return
+
+		if current_password != self.current_student.password:
+			status.update("Current password is incorrect.")
+			return
+
+		try:
+			self.current_student.updatePassword(new_password)
+		except ValueError as error:
+			status.update(str(error))
+			return
+		except Exception:
+			status.update("Could not update password right now.")
+			return
+
+		self._return_to_menu()
+		self.query_one("#menu-status", Label).update("Password updated. Save and Exit to persist.")
 
 	def _get_available_interest_titles(self) -> list[str]:
 		if self.system is None:
