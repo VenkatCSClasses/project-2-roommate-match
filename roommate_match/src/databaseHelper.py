@@ -107,18 +107,17 @@ def create_roommate_request(
 	if group_size > 4:
 		return False, "A group can have at most 4 people."
 
-	active_requests = [
-		queued_request
-		for queued_request in system.requests
-		if int(queued_request.getSenderId()) == sender_id and _request_model_status(queued_request) in {"pending", "accepted"}
-	]
-	if active_requests:
+	active_member_ids: set[int] = set()
+	for queued_request in system.requests:
+		if _request_model_status(queued_request) not in {"pending", "accepted"}:
+			continue
+		active_member_ids.add(int(queued_request.getSenderId()))
+		active_member_ids.update(int(receiver_id) for receiver_id in queued_request.getReceiverIds())
+
+	if sender_id in active_member_ids:
 		return False, "You already have an active roommate request group."
 
-	current_group_member_ids = {sender_id}
-	for queued_request in active_requests:
-		current_group_member_ids.update(int(receiver_id) for receiver_id in queued_request.getReceiverIds())
-	conflicting_ids = [receiver_id for receiver_id in receiver_ids if receiver_id in current_group_member_ids]
+	conflicting_ids = [receiver_id for receiver_id in receiver_ids if receiver_id in active_member_ids]
 	if conflicting_ids:
 		return False, "One or more selected students are already in your active group or pending requests."
 

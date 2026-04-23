@@ -929,11 +929,23 @@ class LoginApp(App):
 	def _format_group_request_status(self, request_rows: list[dict[str, object]]) -> str:
 		lines = ["Current Pairing Status:"]
 		for request_row in request_rows:
-			sender_id = int(request_row["sender_id"])
-			member_ids = [sender_id, *[int(member_id) for member_id in request_row["receiver_ids"]]]
+			# Supports both row formats:
+			# 1) {"id": ..., "status": ...} from get_group_status_for_student
+			# 2) {"sender_id": ..., "receiver_ids": [...], "status": ...}
+			if "id" in request_row:
+				member_id = int(request_row["id"])
+				member_name = self._student_name_from_id(member_id)
+				status_text = str(request_row.get("status", "pending")).capitalize()
+				lines.append(f"- {member_name}: {status_text}")
+				continue
+
+			sender_id = int(request_row.get("sender_id", -1))
+			receiver_ids = [int(member_id) for member_id in request_row.get("receiver_ids", [])]
+			member_ids = [member_id for member_id in [sender_id, *receiver_ids] if member_id >= 0]
 			member_names = ", ".join(self._student_name_from_id(member_id) for member_id in member_ids)
 			status_text = str(request_row.get("status", "pending")).capitalize()
-			lines.append(f"- {member_names} | Status: {status_text}")
+			if member_names:
+				lines.append(f"- {member_names} | Status: {status_text}")
 		return "\n".join(lines)
 
 	def _group_members_for_current_student(self) -> list[object]:
