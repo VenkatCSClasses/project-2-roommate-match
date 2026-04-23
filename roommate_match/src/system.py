@@ -2,8 +2,6 @@ from random import randint
 from src.Student import Student
 from src.roommateRequest import roommateRequest
 from src.pairing import pairing
-from src.roommateRequest import roommateRequest
-from src.pairing import pairing
 
 class RoommateSystem:
     def __init__(self):
@@ -64,32 +62,6 @@ class RoommateSystem:
             newGroupId = randint(1,50)
         
         return newGroupId
-
-
-    def updateRequestList(self):
-        for request in self.requests:
-            if request.isAccepted() == True:
-                senderID = request.getSenderId()
-                group = []
-                group.append(senderID)
-                group.extend(request.getReceiverIds())     
-                
-                new_pairing = pairing(self.generateGroupId(), group)
-                self.pairings.append(new_pairing)
-                self.requests.remove(request)
-
-            if request.isAccepted() == False:
-                    self.requests.remove(request)
-
-    def finalize_pairing(self):
-        for student in self.students:
-            for pairing in self.pairings:
-                if student.id in pairing.students:
-                    student.groupID = pairing.group_id
-                self.pairings.remove(pairing)
-
-    def removeAllPairings(self):
-        self.pairings = []
 
     def updateRequestList(self):
         for request in self.requests:
