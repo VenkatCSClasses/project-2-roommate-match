@@ -14,6 +14,7 @@ from .databaseHelper import (
 	get_incoming_roommate_requests,
 	get_outgoing_roommate_requests,
 	get_student_preference_titles,
+	persist_approved_groups,
 	persist_pending_interest_updates,
 	persist_pending_preference_updates,
 	persist_pending_roommate_requests,
@@ -233,6 +234,7 @@ class LoginApp(App):
 		with Container(id="admin-finalize-pairing-menu", classes="hidden"):
 			yield Label("Finalize Pairings", id="title")
 			yield Label("", id="admin-finalize-pairing-welcome")
+			yield DataTable(id="admin-pairings-table")
 			yield Button("Approve All", id="admin-approve-all-button", variant="primary")
 			yield Button("Reject All", id="admin-reject-all-button", variant="error")
 			yield Button("Return", id="admin-finalize-return-button", variant="default")
@@ -251,6 +253,7 @@ class LoginApp(App):
 		self.query_one("#requests-table", DataTable).cursor_type = "row"
 		self.query_one("#interests-table", DataTable).cursor_type = "row"
 		self.query_one("#preferences-table", DataTable).cursor_type = "row"
+		self.query_one("#admin-pairings-table", DataTable).cursor_type = "row"
 		self.query_one("#email", Input).focus()
 
 	def on_unmount(self) -> None:
@@ -259,6 +262,7 @@ class LoginApp(App):
 			persist_pending_preference_updates(self.db_connection)
 			if self.system is not None:
 				persist_pending_roommate_requests(self.db_connection, self.system)
+				persist_approved_groups(self.db_connection, self.system)
 				persist_students(self.db_connection, self.system)
 			self.db_connection.close()
 
@@ -429,9 +433,22 @@ class LoginApp(App):
 		admin_finalize_pairing_menu = self.query_one("#admin-finalize-pairing-menu", Container)
 		welcome = self.query_one("#admin-finalize-pairing-welcome", Label)
 		status = self.query_one("#admin-finalize-pairing-status", Label)
+		pairings_table = self.query_one("#admin-pairings-table", DataTable)
 
 		welcome.update(f"Welcome, {self.current_admin_name or 'Admin'}")
-		status.update("Choose Approve All or Reject All.")
+
+		pairings_table.clear(columns=True)
+		pairings_table.add_columns("Group ID", "Members")
+		if self.system is not None:
+			for pending_pairing in self.system.pairings:
+				member_names = self._format_pairing_member_names(pending_pairing.get_students())
+				pairings_table.add_row(str(pending_pairing.group_id), member_names)
+
+		if self.system is None or not self.system.pairings:
+			status.update("No pending pairings to finalize.")
+		else:
+			status.update("These pairings are fully accepted. Choose Approve All or Reject All.")
+
 		self.pending_finalize_action = None
 		admin_menu.add_class("hidden")
 		admin_finalize_pairing_menu.remove_class("hidden")
@@ -453,14 +470,41 @@ class LoginApp(App):
 			status.update("Action canceled.")
 			return
 
+		if self.system is None:
+			status.update("Could not load system state.")
+			self.pending_finalize_action = None
+			return
+
+		if not self.system.pairings:
+			status.update("No pending pairings to finalize.")
+			self.pending_finalize_action = None
+			return
+
 		if self.pending_finalize_action == "approve":
-			status.update("Approved all pairings.")
+			approved = self.system.finalize_pairing(approve=True)
+			inserted_groups = 0
+			if self.db_connection is not None:
+				inserted_groups = persist_approved_groups(self.db_connection, self.system)
+			status.update(
+				f"Approved {len(approved)} pairing(s). Added {inserted_groups} group(s) to groups table."
+			)
+			self._admin_show_finalize_pairings_menu()
+			return
 		elif self.pending_finalize_action == "reject":
-			status.update("Rejected all pairings.")
+			rejected = self.system.finalize_pairing(approve=False)
+			status.update(f"Rejected {len(rejected)} pairing(s). No group IDs were assigned.")
+			self._admin_show_finalize_pairings_menu()
+			return
 		else:
 			status.update("No action selected.")
 
 		self.pending_finalize_action = None
+
+	def _format_pairing_member_names(self, member_ids: list[int]) -> str:
+		member_names: list[str] = []
+		for student_id in member_ids:
+			member_names.append(self._student_name_from_id(int(student_id)))
+		return ", ".join(member_names)
 
 	def _authenticate_student(self, email: str, password: str):
 		if self.system is None:
@@ -1365,6 +1409,7 @@ class LoginApp(App):
 			persist_pending_preference_updates(self.db_connection)
 			if self.system is not None:
 				persist_pending_roommate_requests(self.db_connection, self.system)
+				persist_approved_groups(self.db_connection, self.system)
 				persist_students(self.db_connection, self.system)
 
 		self._return_to_menu()
@@ -1394,6 +1439,7 @@ class LoginApp(App):
 			persist_pending_preference_updates(self.db_connection)
 			if self.system is not None:
 				persist_pending_roommate_requests(self.db_connection, self.system)
+				persist_approved_groups(self.db_connection, self.system)
 				persist_students(self.db_connection, self.system)
 		self.exit()
 

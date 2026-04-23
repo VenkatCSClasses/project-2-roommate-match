@@ -10,6 +10,7 @@ class RoommateSystem:
         self.preference_options = []
         self.interest_options = []
         self.pairings = []
+        self.approved_groups = []
         self.requests = []
         self.next_group_id = 1
 
@@ -60,27 +61,34 @@ class RoommateSystem:
         return newGroupId
 
 
-    def updateRequestList(self):
-        for request in self.requests:
-            if request.isAccepted() == True:
+    def updateRequestList(self, _request=None):
+        for request in list(self.requests):
+            if request.isAccepted() is True:
                 senderID = request.getSenderId()
-                group = []
-                group.append(senderID)
-                group.extend(request.getReceiverIds())     
-                
+                group = [senderID]
+                group.extend(request.getReceiverIds())
+
                 new_pairing = pairing(self.generateGroupId(), group)
                 self.pairings.append(new_pairing)
                 self.requests.remove(request)
+            elif request.isAccepted() is False:
+                self.requests.remove(request)
 
-            if request.isAccepted() == False:
-                    self.requests.remove(request)
+    def finalize_pairing(self, approve: bool = True):
+        processed_pairings = list(self.pairings)
+        if not processed_pairings:
+            return []
 
-    def finalize_pairing(self):
-        for student in self.students:
-            for pairing in self.pairings:
-                if student.id in pairing.students:
-                    student.groupID = pairing.group_id
-                self.pairings.remove(pairing)
+        if approve:
+            for current_pairing in processed_pairings:
+                group_members = [int(student_id) for student_id in current_pairing.students]
+                for student in self.students:
+                    if int(student.id) in group_members:
+                        student.groupID = int(current_pairing.group_id)
+                self.approved_groups.append(current_pairing)
+
+        self.pairings = []
+        return processed_pairings
 
     def removeAllPairings(self):
         self.pairings = []

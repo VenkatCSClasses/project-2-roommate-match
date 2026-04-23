@@ -31,3 +31,7 @@ class TestPairing(unittest.TestCase):
         self.assertEqual(self.pair1.get_students(), [205, 305])
         self.assertEqual(self.pair2.get_students(), [405, 505, 605])
         self.assertEqual(self.pair3.get_students(), [705, 805])
+
+
+if __name__ == "__main__":
+    unittest.main()

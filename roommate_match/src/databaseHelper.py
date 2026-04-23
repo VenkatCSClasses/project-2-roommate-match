@@ -284,6 +284,35 @@ def persist_students(connection: sqlite3.Connection, system: RoommateSystem) -> 
 	return len(system.students)
 
 
+def persist_approved_groups(connection: sqlite3.Connection, system: RoommateSystem) -> int:
+	if not hasattr(system, "approved_groups"):
+		return 0
+
+	connection.execute(
+		"""
+		CREATE TABLE IF NOT EXISTS groups (
+			id INTEGER PRIMARY KEY
+		)
+		"""
+	)
+
+	inserted = 0
+	for approved_group in system.approved_groups:
+		group_id = int(getattr(approved_group, "group_id", -1))
+		if group_id < 0:
+			continue
+
+		exists = connection.execute("SELECT 1 FROM groups WHERE id = ?", (group_id,)).fetchone()
+		if exists is not None:
+			continue
+
+		connection.execute("INSERT INTO groups (id) VALUES (?)", (group_id,))
+		inserted += 1
+
+	connection.commit()
+	return inserted
+
+
 def get_interest_options(connection: sqlite3.Connection) -> list[tuple[int, str]]:
 	if not _table_exists(connection, "interests"):
 		return []
