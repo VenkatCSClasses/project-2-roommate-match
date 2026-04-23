@@ -45,7 +45,9 @@ class Student:
 
 
 
-    def sendRequest(self, receiver_ids, system):
+    def sendRequest(self, *receiver_ids):
+        receiver_ids = list(receiver_ids)
+
         # Sender cannot send more than 1 request
         for req in self.requestsSent:
             if req.accepted is None:
@@ -53,14 +55,12 @@ class Student:
 
         # Receivers cannot be in another group
         for rid in receiver_ids:
-            receiver = system.getStudentById(rid)
+            receiver = self.system.getStudentById(rid)
             if receiver.groupID != -1:
                 raise Exception("Receiver already in a group")
 
-
         if len(receiver_ids) == 0 or len(receiver_ids) > 3:
             raise Exception("Invalid number of receivers")
-        
 
         if len(receiver_ids) == 1:
             new_request = roommateRequest(self.id, receiver_ids[0])
@@ -71,14 +71,14 @@ class Student:
         else:
             raise ValueError("sendRequest supports up to 3 receivers")
 
-        system.requests.append(new_request)
-
+        self.system.requests.append(new_request)
 
         for rid in receiver_ids:
-            receiver = system.getStudentById(rid)
+            receiver = self.system.getStudentById(rid)
             receiver.requestsReceived.append(new_request)
 
         self.requestsSent.append(new_request)
+
 
 
     def respondRequest(self, request_id, accept, system):

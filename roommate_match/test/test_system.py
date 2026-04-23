@@ -76,7 +76,7 @@ class TestRoommateSystem(unittest.TestCase):
         student3 = self.system.getStudentByName("Bob")
         stu3ID = student3[0].id
 
-        student1.sendRequest(stu2ID, stu3ID)
+        student1[0].sendRequest(stu2ID, stu3ID)
         self.system.requests[0].reject_request(stu2ID) #reject
         self.system.requests[0].reject_request(stu3ID) #reject
         self.system.requests[0].updateStatus()
