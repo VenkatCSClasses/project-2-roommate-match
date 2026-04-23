@@ -1,4 +1,2 @@
 admin_id,name,email,password
-101,Olivia Carter,olivia.carter@campus.edu,pass123
-102,Daniel Kim,daniel.kim@campus.edu,pass456
-103,Sophia Martinez,sophia.martinez@campus.edu,pass789
+101, admin, admin@campus.edu, admin
