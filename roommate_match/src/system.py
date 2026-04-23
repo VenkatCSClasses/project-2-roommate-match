@@ -80,7 +80,7 @@ class RoommateSystem:
             for pairing in self.pairings:
                 if student.id in pairing.students:
                     student.groupID = pairing.group_id
-                self.pairings.remove(pairing)
+        self.removeAllPairings()
 
     def removeAllPairings(self):
         self.pairings = []
