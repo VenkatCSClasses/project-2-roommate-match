@@ -437,12 +437,21 @@ class LoginApp(App):
 
 		welcome.update(f"Welcome, {self.current_admin_name or 'Admin'}")
 
+		if self.system is not None:
+			update_request_list = getattr(self.system, "updateRequestList", None)
+			if callable(update_request_list):
+				update_request_list()
+
 		pairings_table.clear(columns=True)
 		pairings_table.add_columns("Group ID", "Members")
 		if self.system is not None:
 			for pending_pairing in self.system.pairings:
-				member_names = self._format_pairing_member_names(pending_pairing.get_students())
-				pairings_table.add_row(str(pending_pairing.group_id), member_names)
+				group_id = self._pairing_group_id(pending_pairing)
+				member_ids = self._pairing_member_ids(pending_pairing)
+				if group_id is None or not member_ids:
+					continue
+				member_names = self._format_pairing_member_names(member_ids)
+				pairings_table.add_row(str(group_id), member_names)
 
 		if self.system is None or not self.system.pairings:
 			status.update("No pending pairings to finalize.")
@@ -475,6 +484,10 @@ class LoginApp(App):
 			self.pending_finalize_action = None
 			return
 
+		update_request_list = getattr(self.system, "updateRequestList", None)
+		if callable(update_request_list):
+			update_request_list()
+
 		if not self.system.pairings:
 			status.update("No pending pairings to finalize.")
 			self.pending_finalize_action = None
@@ -505,6 +518,30 @@ class LoginApp(App):
 		for student_id in member_ids:
 			member_names.append(self._student_name_from_id(int(student_id)))
 		return ", ".join(member_names)
+
+	def _pairing_group_id(self, pairing_item: object) -> int | None:
+		if isinstance(pairing_item, dict):
+			group_id = pairing_item.get("group_id")
+			if group_id is None:
+				return None
+			return int(group_id)
+
+		group_id = getattr(pairing_item, "group_id", None)
+		if group_id is None:
+			return None
+		return int(group_id)
+
+	def _pairing_member_ids(self, pairing_item: object) -> list[int]:
+		if isinstance(pairing_item, dict):
+			members = pairing_item.get("members", [])
+			return [int(student_id) for student_id in members]
+
+		get_students = getattr(pairing_item, "get_students", None)
+		if callable(get_students):
+			return [int(student_id) for student_id in get_students()]
+
+		students = getattr(pairing_item, "students", [])
+		return [int(student_id) for student_id in students]
 
 	def _authenticate_student(self, email: str, password: str):
 		if self.system is None:

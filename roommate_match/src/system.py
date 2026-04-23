@@ -81,10 +81,19 @@ class RoommateSystem:
 
         if approve:
             for current_pairing in processed_pairings:
-                group_members = [int(student_id) for student_id in current_pairing.students]
+                if isinstance(current_pairing, dict):
+                    group_members = [int(student_id) for student_id in current_pairing.get("members", [])]
+                    group_id = int(current_pairing.get("group_id", -1))
+                else:
+                    group_members = [int(student_id) for student_id in getattr(current_pairing, "students", [])]
+                    group_id = int(getattr(current_pairing, "group_id", -1))
+
+                if group_id < 0:
+                    continue
+
                 for student in self.students:
                     if int(student.id) in group_members:
-                        student.groupID = int(current_pairing.group_id)
+                        student.groupID = group_id
                 self.approved_groups.append(current_pairing)
 
         self.pairings = []
