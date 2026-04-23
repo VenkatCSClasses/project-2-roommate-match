@@ -12,6 +12,7 @@ from .system import RoommateSystem
 
 
 _PENDING_INTEREST_UPDATES: dict[int, dict[int, set[str]]] = {}
+_PENDING_PREFERENCE_UPDATES: dict[int, dict[int, set[str]]] = {}
 
 
 # -----------------------------------------------------------------------------
@@ -201,6 +202,45 @@ def persist_pending_interest_updates(connection: sqlite3.Connection) -> int:
 	return written_students
 
 
+def persist_pending_preference_updates(connection: sqlite3.Connection) -> int:
+	pending_preference_updates = _pending_preference_updates_for_connection(connection)
+	if not pending_preference_updates:
+		return 0
+
+	if not _table_exists(connection, "student_preferences"):
+		return 0
+
+	columns = _table_columns(connection, "student_preferences")
+	written_students = 0
+
+	for student_id, preference_titles in pending_preference_updates.items():
+		connection.execute("DELETE FROM student_preferences WHERE student_id = ?", (int(student_id),))
+
+		preference_names = sorted(preference_titles)
+		if preference_names:
+			if "id" in columns:
+				next_id_row = connection.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM student_preferences").fetchone()
+				next_id = int(next_id_row[0]) if next_id_row is not None else 1
+				for preference_name in preference_names:
+					connection.execute(
+						"INSERT INTO student_preferences (id, student_id, preference) VALUES (?, ?, ?)",
+						(next_id, int(student_id), preference_name),
+					)
+					next_id += 1
+			else:
+				for preference_name in preference_names:
+					connection.execute(
+						"INSERT INTO student_preferences (student_id, preference) VALUES (?, ?)",
+						(int(student_id), preference_name),
+					)
+
+		written_students += 1
+
+	connection.commit()
+	pending_preference_updates.clear()
+	return written_students
+
+
 def persist_students(connection: sqlite3.Connection, system: RoommateSystem) -> int:
 	if not _table_exists(connection, "students"):
 		return 0
@@ -305,6 +345,52 @@ def remove_interest_from_student(
 	return True, "Interest removed. Save and Exit to persist."
 
 
+def get_student_preference_titles(connection: sqlite3.Connection, student_id: int) -> list[str]:
+	return _get_student_preferences(connection, student_id)
+
+
+def add_preference_to_student(
+	connection: sqlite3.Connection,
+	system: RoommateSystem,
+	student: Student,
+	preference_title: str,
+) -> tuple[bool, str]:
+	if preference_title not in system.preference_options:
+		return False, "That preference does not exist."
+
+	if preference_title in student.preferences:
+		return False, "Preference already exists in your profile."
+
+	updated_preferences = set(student.preferences)
+	updated_preferences.add(preference_title)
+	student.preferences = sorted(updated_preferences)
+
+	pending_preference_updates = _pending_preference_updates_for_connection(connection)
+	pending_preference_updates[int(student.id)] = set(student.preferences)
+	return True, "Preference added. Save and Exit to persist."
+
+
+def remove_preference_from_student(
+	connection: sqlite3.Connection,
+	system: RoommateSystem,
+	student: Student,
+	preference_title: str,
+) -> tuple[bool, str]:
+	if preference_title not in system.preference_options:
+		return False, "That preference does not exist."
+
+	if preference_title not in student.preferences:
+		return False, "Preference was not in your profile."
+
+	updated_preferences = set(student.preferences)
+	updated_preferences.discard(preference_title)
+	student.preferences = sorted(updated_preferences)
+
+	pending_preference_updates = _pending_preference_updates_for_connection(connection)
+	pending_preference_updates[int(student.id)] = set(student.preferences)
+	return True, "Preference removed. Save and Exit to persist."
+
+
 # -----------------------------------------------------------------------------
 # Helpers that use the database
 # -----------------------------------------------------------------------------
@@ -315,6 +401,13 @@ def _pending_interest_updates_for_connection(connection: sqlite3.Connection) -> 
 	if connection_key not in _PENDING_INTEREST_UPDATES:
 		_PENDING_INTEREST_UPDATES[connection_key] = {}
 	return _PENDING_INTEREST_UPDATES[connection_key]
+
+
+def _pending_preference_updates_for_connection(connection: sqlite3.Connection) -> dict[int, set[str]]:
+	connection_key = id(connection)
+	if connection_key not in _PENDING_PREFERENCE_UPDATES:
+		_PENDING_PREFERENCE_UPDATES[connection_key] = {}
+	return _PENDING_PREFERENCE_UPDATES[connection_key]
 
 
 def get_incoming_roommate_requests(
@@ -677,6 +770,19 @@ def _get_student_interest_titles(connection: sqlite3.Connection, student_id: int
 
 
 def _get_student_preferences(connection: sqlite3.Connection, student_id: int) -> list[str]:
+	if _table_exists(connection, "students_to_preference") and _table_exists(connection, "preferences"):
+		rows = connection.execute(
+			"""
+			SELECT p.title
+			FROM students_to_preference AS stp
+			JOIN preferences AS p ON p.id = stp.preference_id
+			WHERE stp.student_id = ?
+			ORDER BY p.title
+			""",
+			(student_id,),
+		).fetchall()
+		return [str(row[0]) for row in rows if row and row[0] is not None]
+
 	if not _table_exists(connection, "student_preferences"):
 		return []
 
@@ -705,6 +811,15 @@ def _populate_interest_options(connection: sqlite3.Connection, system: RoommateS
 
 
 def _populate_preference_options(connection: sqlite3.Connection, system: RoommateSystem) -> None:
+	if _table_exists(connection, "preferences"):
+		rows = connection.execute("SELECT title FROM preferences ORDER BY title").fetchall()
+		system.preference_options = [
+			str(row[0])
+			for row in rows
+			if row and row[0] is not None and str(row[0]).strip().lower() != "title"
+		]
+		return
+
 	if not _table_exists(connection, "preference_options"):
 		return
 

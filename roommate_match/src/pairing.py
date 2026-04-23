@@ -1,5 +1,3 @@
-from roommate_match.src.system import RoommateSystem
-
 class pairing:
     def __init__(self, group_id, students):
         self.group_id = group_id
