@@ -693,23 +693,36 @@ class LoginApp(App):
 		self._set_students_view_mode(True)
 
 		if self.current_student is None or self.system is None:
-			group_details.update("No pairings yet.")
-			status.update(info_message or "No pairing created yet.")
+			group_details.update("No group status available.")
+			status.update(info_message or "No group status available.")
 			group_details.remove_class("hidden")
 			return
 
-		current_pairing = self._pairing_for_student(int(self.current_student.id))
-		if current_pairing is None:
+		current_student_id = int(self.current_student.id)
+		request_status_rows = get_group_status_for_student(self.db_connection, self.system, current_student_id)
+		current_pairing = self._pairing_for_student(current_student_id)
+		if request_status_rows:
+			group_details.update(self._format_group_request_status(request_status_rows))
+			status.update(info_message or "Request status loaded.")
+		elif current_pairing is None and int(self.current_student.groupID) < 0:
 			group_details.update("No pairing yet. A pairing only appears after everyone accepts the request.")
 			status.update(info_message or "No pairing created yet.")
 		else:
-			group_members = [
-				self.system.getStudentById(int(student_id))
-				for student_id in current_pairing.get_students()
-			]
-			group_members = [student for student in group_members if student is not None]
-			group_details.update(self._format_assigned_group_status(group_members))
-			status.update(info_message or "Pairing status loaded.")
+			group_members = self._group_members_for_current_student()
+			if group_members:
+				group_details.update(self._format_assigned_group_status(group_members))
+				status.update(info_message or "Pairing status loaded.")
+			elif current_pairing is not None:
+				group_members = [
+					self.system.getStudentById(int(student_id))
+					for student_id in current_pairing.get_students()
+				]
+				group_members = [student for student in group_members if student is not None]
+				group_details.update(self._format_assigned_group_status(group_members))
+				status.update(info_message or "Pairing status loaded.")
+			else:
+				group_details.update("No pairing yet. A pairing only appears after everyone accepts the request.")
+				status.update(info_message or "No pairing created yet.")
 
 		group_details.remove_class("hidden")
 
@@ -875,6 +888,30 @@ class LoginApp(App):
 		for member in sorted(group_members, key=lambda student: str(student.name).lower()):
 			lines.append(f"- {member.name}")
 		return "\n".join(lines)
+
+	def _format_group_request_status(self, request_rows: list[dict[str, object]]) -> str:
+		lines = ["Current Pairing Status:"]
+		for request_row in request_rows:
+			sender_id = int(request_row["sender_id"])
+			member_ids = [sender_id, *[int(member_id) for member_id in request_row["receiver_ids"]]]
+			member_names = ", ".join(self._student_name_from_id(member_id) for member_id in member_ids)
+			status_text = str(request_row.get("status", "pending")).capitalize()
+			lines.append(f"- {member_names} | Status: {status_text}")
+		return "\n".join(lines)
+
+	def _group_members_for_current_student(self) -> list[object]:
+		if self.system is None or self.current_student is None:
+			return []
+
+		current_group_id = int(self.current_student.groupID)
+		if current_group_id < 0:
+			return []
+
+		return [
+			student
+			for student in self.system.students
+			if int(student.groupID) == current_group_id
+		]
 
 	def _pairing_for_student(self, student_id: int):
 		if self.system is None:
