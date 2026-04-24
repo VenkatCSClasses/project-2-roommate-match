@@ -298,13 +298,17 @@ class Student:
 
     def rankStudentsByMatch(self, allStudents):
         ranked = []
+        current_interests = set(self.interests)
+        current_preferences = set(self.preferences)
 
         for other in allStudents:
             if other.id == self.id:
                 continue
 
-            interestMatches = len(set(self.interests) & set(other.interests))
-            preferenceMatches = len(set(self.preferences) & set(other.preferences))
+            other_interests = set(other.interests)
+            other_preferences = set(other.preferences)
+            interestMatches = len(current_interests & other_interests)
+            preferenceMatches = len(current_preferences & other_preferences)
             totalScore = interestMatches + preferenceMatches
 
             ranked.append((totalScore, other))
