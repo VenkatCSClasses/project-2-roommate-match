@@ -61,8 +61,9 @@ class TestRoommateSystem(unittest.TestCase):
         self.system.updateRequestList()
         self.assertEqual(len(self.system.requests), 0)
 
-        self.system.finalize_pairing()
         self.assertEqual(len(self.system.pairings), 1)
+        self.system.finalize_pairing()
+        self.assertEqual(len(self.system.pairings), 0)
 
     def test_update_request_list_rejected(self):
         self.system.addStudent("Julia", "j@test.com", "123", "NY")
@@ -85,8 +86,9 @@ class TestRoommateSystem(unittest.TestCase):
         self.system.updateRequestList()
         self.assertEqual(len(self.system.requests), 0)
 
-        self.system.finalize_pairing()
         self.assertEqual(len(self.system.pairings), 1)
+        self.system.finalize_pairing()
+        self.assertEqual(len(self.system.pairings), 0)
         
 
     def test_finalize_pairing(self):
