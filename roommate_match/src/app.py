@@ -735,6 +735,12 @@ class LoginApp(App):
 			group_details.remove_class("hidden")
 			return
 
+		if int(self.current_student.groupID) >= 0:
+			group_details.update("Approved")
+			status.update(info_message or "Group status loaded.")
+			group_details.remove_class("hidden")
+			return
+
 		current_student_id = int(self.current_student.id)
 		request_status_rows = get_group_status_for_student(self.db_connection, self.system, current_student_id)
 		current_pairing = self._pairing_for_student(current_student_id)
