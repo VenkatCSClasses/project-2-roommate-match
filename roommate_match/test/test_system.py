@@ -45,13 +45,13 @@ class TestRoommateSystem(unittest.TestCase):
         self.system.addStudent("Bob", "Bob@test.com", "123", "CA")
 
         student1 = self.system.getStudentByName("Julia")
-        stu1ID = student1[0].id
+        stu1 = student1[0]
         student2 = self.system.getStudentByName("April")
         stu2ID = student2[0].id
         student3 = self.system.getStudentByName("Bob")
         stu3ID = student3[0].id
 
-        student1.sendRequest(stu2ID, stu3ID)
+        stu1.sendRequest(stu2ID, stu3ID)
         self.system.requests[0].accept_request(stu2ID) #all receivers accept
         self.system.requests[0].accept_request(stu3ID)
         self.system.requests[0].updateStatus()  #sets accepted = True
@@ -60,8 +60,9 @@ class TestRoommateSystem(unittest.TestCase):
         self.system.updateRequestList()
         self.assertEqual(len(self.system.requests), 0)
 
-        self.system.finalize_pairing()
         self.assertEqual(len(self.system.pairings), 1)
+        self.system.finalize_pairing()
+        self.assertEqual(len(self.system.pairings), 0)
 
     def test_update_request_list_rejected(self):
         self.system.addStudent("Julia", "j@test.com", "123", "NY")
@@ -69,13 +70,13 @@ class TestRoommateSystem(unittest.TestCase):
         self.system.addStudent("Bob", "Bob@test.com", "123", "CA")
 
         student1 = self.system.getStudentByName("Julia")
-        stu1ID = student1[0].id
+        stu1 = student1[0]
         student2 = self.system.getStudentByName("April")
         stu2ID = student2[0].id
         student3 = self.system.getStudentByName("Bob")
         stu3ID = student3[0].id
 
-        student1.sendRequest(stu2ID, stu3ID)
+        student1[0].sendRequest(stu2ID, stu3ID)
         self.system.requests[0].reject_request(stu2ID) #reject
         self.system.requests[0].reject_request(stu3ID) #reject
         self.system.requests[0].updateStatus()
@@ -84,8 +85,9 @@ class TestRoommateSystem(unittest.TestCase):
         self.system.updateRequestList()
         self.assertEqual(len(self.system.requests), 0)
 
-        self.system.finalize_pairing()
         self.assertEqual(len(self.system.pairings), 1)
+        self.system.finalize_pairing()
+        self.assertEqual(len(self.system.pairings), 0)
         
 
     def test_finalize_pairing(self):

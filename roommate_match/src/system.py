@@ -26,6 +26,7 @@ class RoommateSystem:
     def addStudent(self, name, email, password, hometown):
         student_id = self.generateId()
         student = Student(student_id, name, email, password, hometown)
+        student.system = self
         self.students.append(student)
         return student
 
@@ -59,7 +60,6 @@ class RoommateSystem:
             newGroupId = randint(1,50)
         
         return newGroupId
-
 
     def updateRequestList(self, _request=None):
         for request in list(self.requests):

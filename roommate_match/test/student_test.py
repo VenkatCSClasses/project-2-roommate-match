@@ -16,7 +16,8 @@ class StudentTest(unittest.TestCase):
 
         system.students = [s1, s2, s3]
 
-        s1.sendRequest([2, 3], system)
+        s1.system = system
+        s1.sendRequest(2, 3)
 
         self.assertEqual(len(system.requests), 1)
 
@@ -39,7 +40,8 @@ class StudentTest(unittest.TestCase):
 
         system.students = [s1, s2, s3]
 
-        s1.sendRequest([2, 3], system)
+        s1.system = system
+        s1.sendRequest(2, 3)
         req = system.requests[0]
 
         # s2 accepts
@@ -54,7 +56,7 @@ class StudentTest(unittest.TestCase):
 
 
         # Testing all accept
-        s1.sendRequest([2, 3], system)
+        s1.sendRequest(2, 3)
         req = system.requests[0]
 
         s2.respondRequest(req.request_id, True, system)

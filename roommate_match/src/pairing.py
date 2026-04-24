@@ -10,11 +10,6 @@ class pairing:
     def get_students(self):
         return self.students
 
-    # def finalize_pairing(self):
-    #     for student in RoommateSystem.students:
-    #         if student.id in self.students:
-    #             student.groupID = self.group_id
-
     def requestToPairing(self, request):
         group = [request.sender_id] + request.receiver_ids
         new_pairing = pairing(self.generateGroupId(), group)
