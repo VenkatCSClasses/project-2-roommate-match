@@ -46,7 +46,6 @@ class Student:
 
 
     def sendRequest(self, *receiver_ids):
-        receiver_ids = list(receiver_ids)
 
         # Sender cannot send more than 1 request
         for req in self.requestsSent:
