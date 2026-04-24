@@ -617,11 +617,18 @@ class LoginApp(App):
 		if self.system is None:
 			return []
 
-		rows: list[tuple[str, str, str]] = []
+		eligible_students = [
+			student
+			for student in self.system.students
+			if self._is_eligible_for_new_request(student)
+		]
+
 		if self.current_student is not None:
-			ordered_students = self.current_student.rankStudentsByMatch(self.system.students)
+			ordered_students = self.current_student.rankStudentsByMatch(eligible_students)
 		else:
-			ordered_students = sorted(self.system.students, key=lambda s: s.name.lower())
+			ordered_students = sorted(eligible_students, key=lambda s: s.name.lower())
+
+		rows: list[tuple[str, str, str]] = []
 
 		for student in ordered_students:
 			if self.current_student is not None and student.id == self.current_student.id:
@@ -629,6 +636,27 @@ class LoginApp(App):
 			interests = ", ".join(student.interests) if student.interests else "No interests"
 			rows.append((str(student.id), str(student.name), interests))
 		return rows
+
+	def _is_eligible_for_new_request(self, student: object) -> bool:
+		if self.system is None:
+			return False
+
+		student_id = int(getattr(student, "id", -1))
+		if student_id < 0:
+			return False
+
+		student_group_id = int(getattr(student, "groupID", -1))
+		if student_group_id >= 0:
+			return False
+
+		for request in self.system.requests:
+			if request.isAccepted() not in {None, True}:
+				continue
+			member_ids = [int(request.getSenderId()), *[int(receiver_id) for receiver_id in request.getReceiverIds()]]
+			if student_id in member_ids:
+				return False
+
+		return True
 
 	def _show_students_table(self) -> None:
 		status = self.query_one("#menu-status", Label)
