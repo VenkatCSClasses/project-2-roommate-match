@@ -618,7 +618,12 @@ class LoginApp(App):
 			return []
 
 		rows: list[tuple[str, str, str]] = []
-		for student in sorted(self.system.students, key=lambda s: s.name.lower()):
+		if self.current_student is not None:
+			ordered_students = self.current_student.rankStudentsByMatch(self.system.students)
+		else:
+			ordered_students = sorted(self.system.students, key=lambda s: s.name.lower())
+
+		for student in ordered_students:
 			if self.current_student is not None and student.id == self.current_student.id:
 				continue
 			interests = ", ".join(student.interests) if student.interests else "No interests"
