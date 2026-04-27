@@ -182,7 +182,7 @@ class LoginApp(App):
 		with Container(id="student-menu", classes="hidden"):
 			yield Label("Student Menu", id="title")
 			yield Label("", id="menu-welcome")
-			yield Button("View Other Students", id="view-students-button", variant="primary")
+			yield Button("View Students/Make Requests", id="view-students-button", variant="primary")
 			yield Button("View Request Status", id="view-request-status-button", variant="primary")
 			yield Button("View Group Status", id="make-group-button", variant="primary")
 			yield Button("Respond to Requests", id="view-requests-button", variant="primary")
