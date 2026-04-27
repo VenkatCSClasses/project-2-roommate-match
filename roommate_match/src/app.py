@@ -212,6 +212,7 @@ class LoginApp(App):
 			yield Label("", id="admin-menu-welcome")
 			yield Button("Create Student", id="admin-create-student-button", variant="primary")
 			yield Button("Finalize Pairing", id="admin-finalize-pairing-button", variant="primary")
+			yield Button("View Approved Groups", id="admin-view-approved-groups-button", variant="primary")
 			yield Button("Logout", id="admin-logout-button", variant="default")
 			yield Button("Save and Exit", id="admin-save-exit-button", variant="error")
 			yield Label("", id="admin-menu-status")
@@ -239,6 +240,14 @@ class LoginApp(App):
 			yield Button("Reject All", id="admin-reject-all-button", variant="error")
 			yield Button("Return", id="admin-finalize-return-button", variant="default")
 			yield Label("", id="admin-finalize-pairing-status")
+
+		with Container(id="admin-view-approved-groups-menu", classes="hidden"):
+			yield Label("Approved Groups", id="title")
+			yield Label("", id="admin-approved-groups-welcome")
+			yield DataTable(id="admin-approved-groups-table")
+			yield Button("Return", id="admin-approved-groups-return-button", variant="default")
+			yield Label("", id="admin-approved-groups-status")
+
 		yield Footer()
 
 	def on_mount(self) -> None:
@@ -308,6 +317,8 @@ class LoginApp(App):
 			self.query_one("#admin-menu-status", Label).update("Create Student canceled.")
 		elif event.button.id == "admin-finalize-pairing-button":
 			self._admin_show_finalize_pairings_menu()
+		elif event.button.id == "admin-view-approved-groups-button":
+			self._admin_show_approved_groups_menu()
 		elif event.button.id == "admin-approve-all-button":
 			self._admin_prompt_finalize_confirmation("approve")
 		elif event.button.id == "admin-reject-all-button":
@@ -315,6 +326,8 @@ class LoginApp(App):
 		elif event.button.id == "admin-finalize-return-button":
 			self._show_admin_menu(self.current_admin_name or "Admin")
 			self.query_one("#admin-menu-status", Label).update("Finalize Pairings canceled.")
+		elif event.button.id == "admin-approved-groups-return-button":
+			self._show_admin_menu(self.current_admin_name or "Admin")
 		elif event.button.id == "admin-logout-button":
 			self._logout()
 		elif event.button.id == "admin-save-exit-button":
@@ -412,6 +425,7 @@ class LoginApp(App):
 		admin_menu = self.query_one("#admin-menu", Container)
 		admin_create_student_menu = self.query_one("#admin-create-student-menu", Container)
 		admin_finalize_pairing_menu = self.query_one("#admin-finalize-pairing-menu", Container)
+		admin_approved_groups_menu = self.query_one("#admin-view-approved-groups-menu", Container)
 		welcome = self.query_one("#admin-menu-welcome", Label)
 		admin_status = self.query_one("#admin-menu-status", Label)
 
@@ -420,6 +434,7 @@ class LoginApp(App):
 		self.pending_finalize_action = None
 		admin_create_student_menu.add_class("hidden")
 		admin_finalize_pairing_menu.add_class("hidden")
+		admin_approved_groups_menu.add_class("hidden")
 		student_menu.add_class("hidden")
 		login_panel.add_class("hidden")
 		admin_menu.remove_class("hidden")
@@ -461,6 +476,49 @@ class LoginApp(App):
 		self.pending_finalize_action = None
 		admin_menu.add_class("hidden")
 		admin_finalize_pairing_menu.remove_class("hidden")
+
+	def _admin_show_approved_groups_menu(self) -> None:
+		if self.current_admin is None:
+			self.query_one("#admin-menu-status", Label).update("No admin account is currently active.")
+			return
+
+		admin_menu = self.query_one("#admin-menu", Container)
+		approved_groups_menu = self.query_one("#admin-view-approved-groups-menu", Container)
+		welcome = self.query_one("#admin-approved-groups-welcome", Label)
+		status = self.query_one("#admin-approved-groups-status", Label)
+		groups_table = self.query_one("#admin-approved-groups-table", DataTable)
+
+		welcome.update(f"Welcome, {self.current_admin_name or 'Admin'}")
+
+		groups_table.clear(columns=True)
+		groups_table.add_columns("Group ID", "Members")
+
+		if self.db_connection is not None:
+			try:
+				cursor = self.db_connection.cursor()
+				# Get all students with a group_id (approved groups)
+				result = cursor.execute(
+					"SELECT group_id FROM students WHERE group_id IS NOT NULL GROUP BY group_id ORDER BY group_id"
+				).fetchall()
+
+				if not result:
+					status.update("No approved groups found.")
+				else:
+					status.update(f"Showing {len(result)} approved group(s).")
+					for (group_id,) in result:
+						# Get all members of this group
+						members = cursor.execute(
+							"SELECT name FROM students WHERE group_id = ? ORDER BY name", (group_id,)
+						).fetchall()
+						member_names = ", ".join([name[0] for name in members])
+						groups_table.add_row(str(group_id), member_names)
+			except Exception as e:
+				status.update(f"Error loading approved groups: {str(e)}")
+		else:
+			status.update("Database connection not available.")
+
+		admin_menu.add_class("hidden")
+		approved_groups_menu.remove_class("hidden")
 
 	def _admin_prompt_finalize_confirmation(self, action: str) -> None:
 		status = self.query_one("#admin-finalize-pairing-status", Label)
