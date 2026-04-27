@@ -1,8 +1,7 @@
 import unittest
-from src.system import RoommateSystem
-from src.roommateRequest import roommateRequest
-from src.pairing import pairing
-
+from roommate_match.src.system import RoommateSystem
+from roommate_match.src.roommateRequest import roommateRequest
+from roommate_match.src.pairing import pairing
 
 class TestRoommateSystem(unittest.TestCase):
 

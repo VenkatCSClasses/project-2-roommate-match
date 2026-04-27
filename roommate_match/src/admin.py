@@ -1,5 +1,5 @@
 from random import randint
-from src.Student import Student
+from .Student import Student
 
 class Admin:
     def __init__(self, id, name, email, password, system): 

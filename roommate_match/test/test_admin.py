@@ -1,6 +1,6 @@
 import unittest
-from src.system import RoommateSystem
-from src.admin import Admin
+from roommate_match.src.system import RoommateSystem
+from roommate_match.src.admin import Admin
 
 class TestAdmin(unittest.TestCase):
     

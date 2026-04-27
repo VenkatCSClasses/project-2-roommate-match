@@ -1,7 +1,7 @@
 import unittest
-from src.pairing import pairing
-from src.system import RoommateSystem
-from src.Student import Student
+from roommate_match.src.pairing import pairing
+from roommate_match.src.system import RoommateSystem
+from roommate_match.src.Student import Student
 
 class TestPairing(unittest.TestCase):
     def setUp(self):
@@ -31,3 +31,7 @@ class TestPairing(unittest.TestCase):
         self.assertEqual(self.pair1.get_students(), [205, 305])
         self.assertEqual(self.pair2.get_students(), [405, 505, 605])
         self.assertEqual(self.pair3.get_students(), [705, 805])
+
+
+if __name__ == "__main__":
+    unittest.main()

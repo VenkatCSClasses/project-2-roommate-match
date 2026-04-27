@@ -9,9 +9,11 @@ class roommateRequest:
 
     def accept_request(self, r_id):
         self.responses[r_id] = True
+        self.updateStatus()
 
     def reject_request(self, r_id):
         self.responses[r_id] = False
+        self.updateStatus()
 
     def updateStatus(self):
         #checks if everyone has responded
