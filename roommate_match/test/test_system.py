@@ -111,6 +111,19 @@ class TestRoommateSystem(unittest.TestCase):
         self.assertNotEqual(student3.groupID, 1)
         self.assertNotEqual(student4.groupID, 1)
         self.assertNotEqual(student1.groupID, student3.groupID)
+
+    def test_view_students(self):
+        self.system.addStudent("Julia", "j@gmail.com", "123", "Ithaca") #adds students
+        self.system.addStudent("Bob", "bob@gmail.com", "123", "Liverpool")
+        self.system.addStudent("April", "april@gmail.com", "123", "Liverpool")
+        self.system.addStudent("Dylan", "dylan@gmail.com", "123", "Liverpool")
+        self.assertEqual(len(self.system.viewStudents()), 4) #check view students returns all students
+        self.system.addStudent("Ben", "ben@gmail.com", "123", "Ithaca")
+        self.assertEqual(len(self.system.viewStudents()), 5)
+        student1ID = self.system.students[0].id
+        self.system.removeStudent(student1ID)
+        self.assertEqual(len(self.system.viewStudents()), 4)
+        
         
 
 if __name__ == "__main__":
