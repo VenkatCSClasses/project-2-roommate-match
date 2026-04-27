@@ -2,59 +2,85 @@
 
 This document explains how to run and use the roommate match program.
 
-## Install Dependencies
+## Setup & Installation
+
+### Prerequisites
 
 This project uses **uv** to manage Python dependencies.
 
-1. Install uv using the official installer:
+### Steps
 
-[uv Installation Instructions](https://docs.astral.sh/uv/getting-started/installation/)
+1. **Install uv** using the official installer:
+   - [uv Installation Instructions](https://docs.astral.sh/uv/getting-started/installation/)
 
-2. Install the project dependencies (in terminal):
+2. **Install dependencies** in the terminal:
+   ```bash
+   uv sync
+   ```
 
-uv sync
-
-## Running the program
+## Running the Program
 
 1. Open a terminal
-2. Navigate to the project folder /bank/src/
-3. Run the CLI:
+2. Navigate to the project folder
+3. Run the application:
+   ```bash
+   uv run python main.py
+   ```
 
-uv run python main.py
+## User Guide
 
-## Tutorial
+### Admin Menu
 
-Admin menu:
-- log in using email: admin@campus.edu, password: admin
-has options:
-- create student
-    - enter student information
-    - a temporary password will be assigned to that student
-    - the student can change this password when they log in
-- finalize pairing
-    - pairings will show up here when all members of a request have accepted it
-    - admin can reject or approve all pairings
-    - once approved, a group ID is assigned and the group can be found under the view all groups button
+**Login:** 
+- Email: `admin@campus.edu`
+- Password: `admin`
 
-Student menu:
-- log in using an email and username in the students.csv file
-has options:
-- view students/make request
-    - students are listed in order from most similar to least similar
-    - a student can make a request if they have no requests outgoing or pending
-    - a student can only send one request and can only recieve one request
-    - click on multiple students to send a request all at once
-    - if one person in the request group rejects the request, the request is void and a new request must be made
-- view request status
-    - view all members of the group and see their status: pending/accepted
-- view group status
-    - a request becomes a group when all members of the request have accepted
-    - once a request becomes a group, the admin has the option to approve or deny this group
-- respond to requests
-    - see pending requests and accept or reject the request
-- change interests
-    - click to toggle each of the interests
-- change preferences
-    - click to toggle each of the preferences
-- change password
-    - provide old password to change to a new password
+**Available Options:**
+
+- **Create Student**
+  - Enter student information
+  - A temporary password will be assigned to that student
+  - The student can change this password when they log in
+
+- **Finalize Pairing**
+  - Pairings will show up here when all members of a request have accepted it
+  - Admin can reject or approve all pairings
+  - Once approved, a group ID is assigned and the group can be found under the view all groups button
+
+### Student Menu
+
+**Login:** 
+- Use an email and password from the students.csv file
+
+**Available Options:**
+
+- **View Students/Make Requests**
+  - Students are listed in order from most similar to least similar
+  - A student can make a request if they have no requests outgoing or pending
+  - A student can only send one request and can only receive one request
+  - Click on multiple students to send a request all at once
+  - If one person in the request group rejects the request, the request is void and a new request must be made
+
+- **View Request Status**
+  - View all members of the group and see their status (pending/accepted)
+
+- **View Group Status**
+  - A request becomes a group when all members of the request have accepted
+  - Once a request becomes a group, the admin has the option to approve or deny this group
+  - Approved groups will show an "Approved" status
+
+- **Respond to Requests**
+  - See pending requests and accept or reject them
+
+- **Change Interests**
+  - Click to toggle each of the interests
+
+- **Change Preferences**
+  - Click to toggle each of the preferences
+
+- **Change Password**
+  - Provide old password to change to a new password
+
+## Testing
+
+Run tests using a Python debugger. All tests passing indicates that the system is working correctly. 
