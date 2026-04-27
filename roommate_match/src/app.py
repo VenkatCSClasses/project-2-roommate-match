@@ -493,29 +493,35 @@ class LoginApp(App):
 		groups_table.clear(columns=True)
 		groups_table.add_columns("Group ID", "Members")
 
-		if self.db_connection is not None:
+		group_members_by_id: dict[int, list[str]] = {}
+
+		# Prefer live in-memory system state so newly approved groups are shown immediately.
+		if self.system is not None:
+			for student in self.system.students:
+				group_id = int(getattr(student, "groupID", -1))
+				if group_id < 0:
+					continue
+				group_members_by_id.setdefault(group_id, []).append(str(student.name))
+
+		# Fallback to database if live state has no approved groups.
+		if not group_members_by_id and self.db_connection is not None:
 			try:
 				cursor = self.db_connection.cursor()
-				# Get all students with a group_id (approved groups)
-				result = cursor.execute(
-					"SELECT group_id FROM students WHERE group_id IS NOT NULL GROUP BY group_id ORDER BY group_id"
+				rows = cursor.execute(
+					"SELECT group_id, name FROM students WHERE group_id IS NOT NULL AND group_id >= 0 ORDER BY group_id, name"
 				).fetchall()
-
-				if not result:
-					status.update("No approved groups found.")
-				else:
-					status.update(f"Showing {len(result)} approved group(s).")
-					for (group_id,) in result:
-						# Get all members of this group
-						members = cursor.execute(
-							"SELECT name FROM students WHERE group_id = ? ORDER BY name", (group_id,)
-						).fetchall()
-						member_names = ", ".join([name[0] for name in members])
-						groups_table.add_row(str(group_id), member_names)
+				for group_id, member_name in rows:
+					group_members_by_id.setdefault(int(group_id), []).append(str(member_name))
 			except Exception as e:
 				status.update(f"Error loading approved groups: {str(e)}")
+
+		if not group_members_by_id:
+			status.update("No approved groups found.")
 		else:
-			status.update("Database connection not available.")
+			for group_id in sorted(group_members_by_id):
+				member_names = ", ".join(sorted(group_members_by_id[group_id], key=str.lower))
+				groups_table.add_row(str(group_id), member_names)
+			status.update(f"Showing {len(group_members_by_id)} approved group(s).")
 
 		admin_menu.add_class("hidden")
 		approved_groups_menu.remove_class("hidden")
@@ -556,6 +562,7 @@ class LoginApp(App):
 			inserted_groups = 0
 			if self.db_connection is not None:
 				inserted_groups = persist_approved_groups(self.db_connection, self.system)
+				persist_students(self.db_connection, self.system)
 			status.update(
 				f"Approved {len(approved)} pairing(s). Added {inserted_groups} group(s) to groups table."
 			)
