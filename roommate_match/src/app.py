@@ -826,8 +826,13 @@ class LoginApp(App):
 			group_details.remove_class("hidden")
 			return
 
+		update_request_list = getattr(self.system, "updateRequestList", None)
+		if callable(update_request_list):
+			update_request_list()
+
 		if int(self.current_student.groupID) >= 0:
-			group_details.update("Approved")
+			group_members = self._group_members_for_current_student()
+			group_details.update(self._format_assigned_group_status(group_members, "Approved"))
 			status.update(info_message or "Group status loaded.")
 			group_details.remove_class("hidden")
 			return
@@ -844,7 +849,7 @@ class LoginApp(App):
 		else:
 			group_members = self._group_members_for_current_student()
 			if group_members:
-				group_details.update(self._format_assigned_group_status(group_members))
+				group_details.update(self._format_assigned_group_status(group_members, "Approved"))
 				status.update(info_message or "Pairing status loaded.")
 			elif current_pairing is not None:
 				group_members = [
@@ -852,8 +857,8 @@ class LoginApp(App):
 					for student_id in current_pairing.get_students()
 				]
 				group_members = [student for student in group_members if student is not None]
-				group_details.update(self._format_assigned_group_status(group_members))
-				status.update(info_message or "Pairing status loaded.")
+				group_details.update(self._format_assigned_group_status(group_members, "Pending Approval from Admin"))
+				status.update(info_message or "Pairing is pending admin approval.")
 			else:
 				group_details.update("No pairing yet. A pairing only appears after everyone accepts the request.")
 				status.update(info_message or "No pairing created yet.")
@@ -1012,8 +1017,8 @@ class LoginApp(App):
 			lines.append(f"- {member_name}: {member['status']}")
 		return "\n".join(lines)
 
-	def _format_assigned_group_status(self, group_members: list[object]) -> str:
-		lines = ["Current Pairing"]
+	def _format_assigned_group_status(self, group_members: list[object], status_text: str = "Pending Approval from Admin") -> str:
+		lines = ["Current Pairing", f"Status: {status_text}"]
 		if not group_members:
 			lines.append("- No members found for this pairing.")
 			return "\n".join(lines)
