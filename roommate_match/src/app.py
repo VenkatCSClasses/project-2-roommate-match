@@ -66,7 +66,7 @@ class ConfirmActionModal(ModalScreen[bool]):
 			self.dismiss(False)
 
 
-class LoginApp(App):
+class RoommateMatch(App):
 	"""A simple login screen with email and password fields."""
 
 	db_connection = None
@@ -183,7 +183,7 @@ class LoginApp(App):
 			yield Label("Student Menu", id="title")
 			yield Label("", id="menu-welcome")
 			yield Button("View Students/Make Requests", id="view-students-button", variant="primary")
-			yield Button("View Request Status", id="view-request-status-button", variant="primary")
+			yield Button("View Sent Requests", id="view-request-status-button", variant="primary")
 			yield Button("View Group Status", id="make-group-button", variant="primary")
 			yield Button("Respond to Requests", id="view-requests-button", variant="primary")
 			yield Button("Change Interests", id="change-interests-button", variant="primary")
@@ -721,6 +721,11 @@ class LoginApp(App):
 			if student_id in member_ids:
 				return False
 
+		for pairing in self.system.pairings:
+			member_ids = [int(member_id) for member_id in pairing.get_students()]
+			if student_id in member_ids:
+				return False
+
 		return True
 
 	def _show_students_table(self) -> None:
@@ -782,8 +787,8 @@ class LoginApp(App):
 
 		if int(self.current_student.groupID) >= 0:
 			return (
-				"You already have an active request. "
-				"Complete your current request before sending a new one."
+				"You already have an approved group. "
+				"You cannot send a new request until your group is dissolved."
 			)
 
 		incoming_requests = get_incoming_roommate_requests(
@@ -803,7 +808,13 @@ class LoginApp(App):
 			int(self.current_student.id),
 		)
 		if outgoing_requests:
-			return "You already have an active request. Wait for it to finish before sending another one."
+			return "You already have an active outgoing request. Wait for it to finish before sending another one."
+
+		current_student_id = int(self.current_student.id)
+		for pairing in self.system.pairings:
+			member_ids = [int(member_id) for member_id in pairing.get_students()]
+			if current_student_id in member_ids:
+				return "You are in a pairing pending admin approval. You cannot send a new request until this is resolved."
 
 		return None
 
@@ -1220,6 +1231,11 @@ class LoginApp(App):
 
 		if self.db_connection is None:
 			status.update("Unable to connect to app.db.")
+			return
+
+		block_message = self._student_request_or_group_block_message()
+		if block_message is not None:
+			status.update(block_message)
 			return
 
 		selected_names = self._selected_student_names()
@@ -1640,7 +1656,7 @@ class LoginApp(App):
 
 
 def main() -> None:
-	LoginApp().run()
+	RoommateMatch().run()
 
 
 if __name__ == "__main__":
