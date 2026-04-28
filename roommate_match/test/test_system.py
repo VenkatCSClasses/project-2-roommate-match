@@ -94,6 +94,32 @@ class TestRoommateSystem(unittest.TestCase):
         self.assertEqual(student2[0].groupID, -1)
         self.assertEqual(student2[0].groupID, -1)
         
+    def test_one_rejected_request(self):
+        self.system.addStudent("Julia", "j@test.com", "123", "NY")
+        self.system.addStudent("April", "April@test.com", "123", "CA")
+        self.system.addStudent("Bob", "Bob@test.com", "123", "CA")
+
+        student1 = self.system.getStudentByName("Julia")
+        stu1 = student1[0]
+        student2 = self.system.getStudentByName("April")
+        stu2ID = student2[0].id
+        student3 = self.system.getStudentByName("Bob")
+        stu3ID = student3[0].id
+
+        stu1.sendRequest(stu2ID, stu3ID)
+        self.system.requests[0].accept_request(stu2ID) #accept
+        self.system.requests[0].reject_request(stu3ID) #reject
+        self.system.requests[0].updateStatus()
+
+        self.assertEqual(len(self.system.requests), 1)
+        self.system.updateRequestList()
+        self.assertEqual(len(self.system.requests), 0)
+
+        self.assertEqual(len(self.system.pairings), 0)
+        self.assertEqual(stu1.groupID, -1)
+        self.assertEqual(student2[0].groupID, -1)
+        self.assertEqual(student2[0].groupID, -1)
+        
 
     def test_finalize_pairing(self):
         self.system.addStudent("Julia", "j@gmail.com", "123", "Ithaca") #adds students
