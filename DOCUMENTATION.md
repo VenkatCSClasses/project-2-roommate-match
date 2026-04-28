@@ -93,10 +93,10 @@ Creates three students. One student sends requests to the other two students. Bo
 #### test_one_rejected_request
 Creates three students. One student sends requests to the other two students. One student reject the request and the other accepts. updateStatus() marks the request as rejected. The test first confirms that the rejected request was successfully added to the system's request list by checking that there is exactly one request. Then, when updateRequestList() is called, the rejected requests should be removed from the request list. Then we check that the request list is empty and the pairing list is empty. Lastly, we check all three students groupID is still -1.
 
-### Component tests
+## Component tests
 #### test_system.py
-test_add_student
-test_remove_student
+##### test_add_student
+##### test_remove_student
 test_get_student_by_name
 test_get_student_by_id
 test_finalize_pairing
