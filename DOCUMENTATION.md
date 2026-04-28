@@ -94,45 +94,45 @@ Creates three students. One student sends requests to the other two students. Bo
 Creates three students. One student sends requests to the other two students. One student reject the request and the other accepts. updateStatus() marks the request as rejected. The test first confirms that the rejected request was successfully added to the system's request list by checking that there is exactly one request. Then, when updateRequestList() is called, the rejected requests should be removed from the request list. Then we check that the request list is empty and the pairing list is empty. Lastly, we check all three students groupID is still -1.
 
 ## Component tests
-#### test_system.py
+### test_system.py
 ##### test_add_student
 ##### test_remove_student
-test_get_student_by_name
-test_get_student_by_id
-test_finalize_pairing
-test_view_students
+##### test_get_student_by_name
+##### test_get_student_by_id
+##### test_finalize_pairing
+##### test_view_students
 
-#### student_test.py
-test_sendRequest
-test_respondRequest
-test_updatePassword
-test_updateName
-test_updateHometown
-test_updateInterests
-test_updatePreferences
-test_viewStudents
-test_searchStudents
-test_rankStudentsByMatch
+### student_test.py
+##### test_sendRequest
+##### test_respondRequest
+##### test_updatePassword
+##### test_updateName
+##### test_updateHometown
+##### test_updateInterests
+##### test_updatePreferences
+##### test_viewStudents
+##### test_searchStudents
+##### test_rankStudentsByMatch
 
-#### test_admin.py
-test_add_student
-test_remove_student
-test_view_all_students
-test_get_student_by_name
-test_get_student_by_id
-test_add_preference_option
-test_add_interest_option
+### test_admin.py
+##### test_add_student
+##### test_remove_student
+##### test_view_all_students
+##### test_get_student_by_name
+##### test_get_student_by_id
+##### test_add_preference_option
+##### test_add_interest_option
 
-#### test_roommateRequest.py
-test_initial_status
-test_accept_request
-test_reject_request
-test_get_sender_id
-test_get_receiver_ids
+### test_roommateRequest.py
+##### test_initial_status
+##### test_accept_request
+##### test_reject_request
+##### test_get_sender_id
+##### test_get_receiver_ids
 
-#### test_pairing.py
-test_get_group_id
-test_get_students
+### test_pairing.py
+##### test_get_group_id
+##### test_get_students
 
 
 
